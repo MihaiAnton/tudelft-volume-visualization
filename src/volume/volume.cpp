@@ -190,11 +190,17 @@ float Volume::bicubicInterpolateXY(const glm::vec2& xyCoord, int z) const
     return result[0];
 }
 
-// ======= TODO : IMPLEMENT ========
+// ======= TODO : Check if correct ========
 // This function computes the tricubic interpolation at coord
 float Volume::getVoxelTriCubicInterpolate(const glm::vec3& coord) const
 {
-    return 0.0f;
+    int offset = 1;
+    float value = 0.0f;
+    for (int i = 0 - offset; i < 4 - offset; i++) {
+        int z = static_cast<int>(coord.z + i);
+        value += this->weight(coord.z - z) * this->bicubicInterpolateXY(glm::vec2(coord), z);
+    }
+    return value;
 }
 
 // Load an fld volume data file
