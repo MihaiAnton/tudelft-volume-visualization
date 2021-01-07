@@ -159,11 +159,10 @@ float Volume::weight(float x)
     return 0.0f;
 }
 
-// ======= TODO : IMPLEMENT ========
 // This functions returns the results of a cubic interpolation using 4 values and a factor
 float Volume::cubicInterpolate(float g0, float g1, float g2, float g3, float factor)
 {
-    return 0.0f;
+    return g0 * pow(factor, 3) + g1 * pow(factor, 2) + g2 * factor + g3;
 }
 
 // ======= TODO : IMPLEMENT ========
