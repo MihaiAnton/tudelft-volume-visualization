@@ -200,6 +200,9 @@ float Volume::getVoxelTriCubicInterpolate(const glm::vec3& coord) const
         int z = static_cast<int>(coord.z + i);
         value += this->weight(coord.z - z) * this->bicubicInterpolateXY(glm::vec2(coord), z);
     }
+    if (value < 0) {
+        return 0;
+    }
     return value;
 }
 
