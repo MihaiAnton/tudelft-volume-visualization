@@ -78,6 +78,9 @@ std::string_view Volume::fileName() const
 float Volume::getVoxel(int x, int y, int z) const
 {
     const size_t i = size_t(x + m_dim.x * (y + m_dim.y * z));
+    if (i >= m_data.size() || i < 0) {
+        return 0;
+    }
     return static_cast<float>(m_data[i]);
 }
 
@@ -162,44 +165,58 @@ float Volume::weight(float x)
 // This functions returns the results of a cubic interpolation using 4 values and a factor
 float Volume::cubicInterpolate(float g0, float g1, float g2, float g3, float factor)
 {
-    return g0 * pow(factor, 3) + g1 * pow(factor, 2) + g2 * factor + g3;
+    float value = pow(factor, 3) * (-0.5 * g0 + 1.5 * g1 - 1.5 * g2 + 0.5 * g3) + pow(factor, 2) * (g0 - 2.5 * g1 + 2 * g2 - 0.5 * g3) + factor * (-0.5 * g0 + 0.5 * g2) + g1;
+    return value;
 }
 
 // ======= TODO : Check if correct ========
 // This function returns the value of a bicubic interpolation
 float Volume::bicubicInterpolateXY(const glm::vec2& xyCoord, int z) const
 {
-    glm::mat4 values;
-    glm::vec4 dist_x;
-    glm::vec4 dist_y;
+    glm::vec4 values;
 
     int offset = 1;
-    for (int i = 0 - offset; i < 4 - offset; i++) {
-        for (int j = 0 - offset; j < 4 - offset; j++) {
-            int x = static_cast<int>(xyCoord.x + i);
-            int y = static_cast<int>(xyCoord.y + j);
+    // int y = static_cast<int>(xyCoord.y);
 
-            values[i + offset][j + offset] = this->getVoxel(x, y, z);
-            dist_x[i + offset] = this->weight(xyCoord.x - x);
-            dist_y[j + offset] = this->weight(xyCoord.y - y);
-        }
+    const int x = static_cast<int>(xyCoord.x);
+    const int y = static_cast<int>(xyCoord.y);
+
+    const float fac_x = xyCoord.x - float(x);
+    const float fac_y = xyCoord.y - float(y);
+
+    for (int i = 0 - offset; i < 4 - offset; i++) {
+        int x = static_cast<int>(xyCoord.x + i);
+        values[i + offset] = this->cubicInterpolate(
+            this->getVoxel(x, y - offset, z),
+            this->getVoxel(x, y - offset + 1, z),
+            this->getVoxel(x, y - offset + 2, z),
+            this->getVoxel(x, y - offset + 3, z),
+            fac_y);
     }
 
-    glm::vec1 result = (dist_x * values) * dist_y;
-
-    return result[0];
+    // interpolate for y
+    return cubicInterpolate(values[0], values[1], values[2], values[3], fac_x);
 }
 
 // ======= TODO : Check if correct ========
 // This function computes the tricubic interpolation at coord
 float Volume::getVoxelTriCubicInterpolate(const glm::vec3& coord) const
 {
+    if (glm::any(glm::lessThan(coord, glm::vec3(0))) || glm::any(glm::greaterThanEqual(coord, glm::vec3(m_dim - 1))))
+        return 0.0f;
+
+    glm::vec4 values;
     int offset = 1;
-    float value = 0.0f;
+    const int z = static_cast<int>(coord.z);
+    const float fac_z = coord.z - float(z);
+
     for (int i = 0 - offset; i < 4 - offset; i++) {
         int z = static_cast<int>(coord.z + i);
-        value += this->weight(coord.z - z) * this->bicubicInterpolateXY(glm::vec2(coord), z);
+        values[i + offset] = this->bicubicInterpolateXY(glm::vec2(coord), z);
     }
+
+    float value = this->cubicInterpolate(values[0], values[1], values[2], values[3], fac_z);
+
     if (value < 0) {
         return 0;
     }

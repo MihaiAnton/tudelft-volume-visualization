@@ -32,7 +32,7 @@ public:
     float getVoxel(int x, int y, int z) const;
 
 protected:
-    static const float a = -0.75;
+    static constexpr float a = -0.75f;
     float getVoxelNN(const glm::vec3& coord) const;
     static float linearInterpolate(float g0, float g1, float factor);
     float getVoxelLinearInterpolate(const glm::vec3& coord) const;
