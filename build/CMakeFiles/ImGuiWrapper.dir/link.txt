@@ -1,0 +1,2 @@
+/usr/bin/ar qc libImGuiWrapper.a CMakeFiles/ImGuiWrapper.dir/src/imgui/imgui_impl_glfw.cpp.o CMakeFiles/ImGuiWrapper.dir/src/imgui/imgui_impl_opengl3.cpp.o
+/usr/bin/ranlib libImGuiWrapper.a
