@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <gsl/span>
 #include <iostream>
+#include <math.h>
 #include <string>
 
 struct Header {
@@ -144,10 +145,17 @@ float Volume::linearInterpolate(float g0, float g1, float factor)
     return (1 - factor) * g0 + factor * g1;
 }
 
-// ======= TODO : IMPLEMENT ========
 // This function represents the h(x) function, which returns the weight of the cubic interpolation kernel for a given position x
 float Volume::weight(float x)
 {
+    x = abs(x);
+
+    if (x < 1) {
+        return (Volume::a + 2) * pow(x, 3) - (Volume::a + 3) * pow(x, 2) + 1;
+    } else if (x < 2) {
+        return Volume::a * pow(x, 3) - 5 * Volume::a * pow(x, 2) + 8 * Volume::a * x - 4 * Volume::a;
+    }
+
     return 0.0f;
 }
 
