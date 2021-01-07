@@ -165,11 +165,29 @@ float Volume::cubicInterpolate(float g0, float g1, float g2, float g3, float fac
     return g0 * pow(factor, 3) + g1 * pow(factor, 2) + g2 * factor + g3;
 }
 
-// ======= TODO : IMPLEMENT ========
+// ======= TODO : Check if correct ========
 // This function returns the value of a bicubic interpolation
 float Volume::bicubicInterpolateXY(const glm::vec2& xyCoord, int z) const
 {
-    return 0.0f;
+    glm::mat4 values;
+    glm::vec4 dist_x;
+    glm::vec4 dist_y;
+
+    int offset = 1;
+    for (int i = 0 - offset; i < 4 - offset; i++) {
+        for (int j = 0 - offset; j < 4 - offset; j++) {
+            int x = static_cast<int>(xyCoord.x + i);
+            int y = static_cast<int>(xyCoord.y + j);
+
+            values[i + offset][j + offset] = this->getVoxel(x, y, z);
+            dist_x[i + offset] = this->weight(xyCoord.x - x);
+            dist_y[j + offset] = this->weight(xyCoord.y - y);
+        }
+    }
+
+    glm::vec1 result = (dist_x * values) * dist_y;
+
+    return result[0];
 }
 
 // ======= TODO : IMPLEMENT ========
