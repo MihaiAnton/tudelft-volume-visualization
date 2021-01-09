@@ -69,7 +69,7 @@ void Renderer::render()
     const Bounds bounds { glm::vec3(0.0f), glm::vec3(m_pVolume->dims() - glm::ivec3(1)) };
 
     // 0 = sequential (single-core), 1 = TBB (multi-core)
-#ifdef NDEBUG
+#if true // TODO change back to #ifdef NDEBUG
     // If NOT in debug mode then enable parallelism using the TBB library (Intel Threaded Building Blocks).
 #define PARALLELISM 1
 #else
@@ -175,8 +175,23 @@ glm::vec4 Renderer::traceRayMIP(const Ray& ray, float sampleStep) const
 // Use the bisectionAccuracy function (to be implemented) to get a more precise isosurface location between two steps.
 glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 {
-    static constexpr glm::vec3 isoColor { 0.8f, 0.8f, 0.2f };
-    return glm::vec4(isoColor, 1.0f);
+    glm::vec3 sample_pos = ray.origin + ray.tmin * ray.direction;
+    const glm::vec3 increment = sampleStep * ray.direction;
+    glm::vec4 color(0.0f);
+
+    for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, sample_pos += increment) {
+        auto voxel_value = this->m_pVolume->getVoxelInterpolate(sample_pos);
+        if (voxel_value > this->m_config.isoValue) {
+            color = this->getTFValue(voxel_value);
+            // color = glm::vec4 { 0.8f, 0.8f, 0.2f, 1.0f };
+            break;
+        }
+    }
+
+    return color;
+
+    // static constexpr glm::vec3 isoColor { 0.8f, 0.8f, 0.2f };
+    // return glm::vec4(isoColor, 1.0f);
 }
 
 // ======= TODO: IMPLEMENT ========
@@ -188,7 +203,6 @@ float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoV
     return 0.0f;
 }
 
-// ======= TODO: IMPLEMENT ========
 // In this function, implement 1D transfer function raycasting.
 // Use getTFValue to compute the color for a given volume value according to the 1D transfer function.
 glm::vec4 Renderer::traceRayComposite(const Ray& ray, float sampleStep) const
