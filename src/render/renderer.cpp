@@ -193,20 +193,19 @@ float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoV
 // Use getTFValue to compute the color for a given volume value according to the 1D transfer function.
 glm::vec4 Renderer::traceRayComposite(const Ray& ray, float sampleStep) const
 {
-    glm::vec4 rgba = glm::vec4(0.0f);
+    //glm::vec4 rgba = glm::vec4(0.0f);
+    glm::vec3 color = glm::vec3(0.0f);
+
     // Incrementing samplePos directly instead of recomputing it each frame gives a measureable speed-up.
-    glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
-    const glm::vec3 increment = sampleStep * ray.direction;
-    for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
+    glm::vec3 samplePos = ray.origin + ray.tmax * ray.direction;
+    const glm::vec3 decrement = sampleStep * ray.direction;
+    for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= decrement) {
         const float val = m_pVolume->getVoxelInterpolate(samplePos);
-        rgba = getTFValue(val);
-        // r = rgba.r; g = rgba.g; b = rgba.b; a = rgba.a;
-        rgba.r *= rgba.a; rgba.g *= rgba.a; rgba.b *= rgba.a;
-        rgba.r = rgba.r + (1 - rgba.a)*rgba.r;
-        if(rgba.a==1){break;}
+        glm::vec4 rgba = getTFValue(val);
+        color = rgba.a*(glm::vec3 (rgba)) + (1 - rgba.a)*color;
     }
 
-    return rgba;
+    return glm::vec4 (color, 1);
 }
 
 // ======= TODO: IMPLEMENT ========
