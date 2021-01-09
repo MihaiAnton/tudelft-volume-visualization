@@ -58,6 +58,9 @@ private:
     bool instersectRayVolumeBounds(Ray& ray, const Bounds& volumeBounds) const;
     void fillColor(int x, int y, const glm::vec4& color);
 
+    glm::vec4 backToFrontComposite(const Ray& ray, float sampleStep) const;
+    glm::vec4 frontToBackCompositing(const Ray& ray, float sampleStep) const;
+
 protected:
     const volume::Volume* m_pVolume;
     const volume::GradientVolume* m_pGradientVolume;
