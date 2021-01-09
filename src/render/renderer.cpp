@@ -167,7 +167,7 @@ glm::vec4 Renderer::traceRayMIP(const Ray& ray, float sampleStep) const
     return glm::vec4(glm::vec3(maxVal) / m_pVolume->maximum(), 1.0f);
 }
 
-// ======= TODO: IMPLEMENT ========
+// ======= TODO: check phong parameters ========
 // This function should find the position where the ray intersects with the volume's isosurface.
 // If volume shading is DISABLED then simply return the isoColor.
 // If volume shading is ENABLED then return the phong-shaded color at that location using the local gradient (from m_pGradientVolume).
@@ -175,23 +175,36 @@ glm::vec4 Renderer::traceRayMIP(const Ray& ray, float sampleStep) const
 // Use the bisectionAccuracy function (to be implemented) to get a more precise isosurface location between two steps.
 glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 {
-    glm::vec3 sample_pos = ray.origin + ray.tmin * ray.direction;
-    const glm::vec3 increment = sampleStep * ray.direction;
     glm::vec4 color(0.0f);
+    if (!this->m_config.volumeShading) {
+        glm::vec3 sample_pos = ray.origin + ray.tmin * ray.direction;
+        const glm::vec3 increment = sampleStep * ray.direction;
 
-    for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, sample_pos += increment) {
-        auto voxel_value = this->m_pVolume->getVoxelInterpolate(sample_pos);
-        if (voxel_value > this->m_config.isoValue) {
-            color = this->getTFValue(voxel_value);
-            // color = glm::vec4 { 0.8f, 0.8f, 0.2f, 1.0f };
-            break;
+        for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, sample_pos += increment) {
+            auto voxel_value = this->m_pVolume->getVoxelInterpolate(sample_pos);
+            if (voxel_value > this->m_config.isoValue) {
+                color = this->getTFValue(voxel_value);
+                // color = glm::vec4 { 0.8f, 0.8f, 0.2f, 1.0f };
+                break;
+            }
+        }
+    } else {
+
+        glm::vec3 sample_pos = ray.origin + ray.tmin * ray.direction;
+        const glm::vec3 increment = sampleStep * ray.direction;
+
+        for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, sample_pos += increment) {
+            auto voxel_value = this->m_pVolume->getVoxelInterpolate(sample_pos);
+            if (voxel_value > this->m_config.isoValue) {
+                auto _color = glm::vec4 { 0.8f, 0.8f, 0.2f, 1.0f };
+                auto gradient = this->m_pGradientVolume->getGradientVoxel(sample_pos);
+                color = glm::vec4(this->computePhongShading(_color, gradient, this->m_pCamera->position(), this->m_pCamera->position()), 1.0f);
+                break;
+            }
         }
     }
 
     return color;
-
-    // static constexpr glm::vec3 isoColor { 0.8f, 0.8f, 0.2f };
-    // return glm::vec4(isoColor, 1.0f);
 }
 
 // ======= TODO: IMPLEMENT ========
@@ -227,7 +240,16 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 // You are free to choose any specular power that you'd like.
 glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V)
 {
-    return glm::vec3(0.0f);
+    const float ka = 0.9;
+    const float kd = 0.3;
+    const float ks = 0.2;
+    const int alpha = 100;
+    const int n = 100;
+
+    const float theta = acos(glm::dot(gradient.dir, L) / (gradient.magnitude * glm::length(L)));
+    const float phi = acos(glm::dot(L, V) / (glm::length(L) * glm::length(L))) - theta;
+
+    return (ka + kd * cos(theta) + ks * cos(phi)) * color;
 }
 
 // ======= DO NOT MODIFY THIS FUNCTION ========
