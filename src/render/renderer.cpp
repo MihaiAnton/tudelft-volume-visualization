@@ -176,7 +176,20 @@ glm::vec4 Renderer::traceRayMIP(const Ray& ray, float sampleStep) const
 glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 {
     static constexpr glm::vec3 isoColor { 0.8f, 0.8f, 0.2f };
-    return glm::vec4(isoColor, 1.0f);
+    glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
+    const glm::vec3 increment = sampleStep * ray.direction;
+    glm::vec4 coordInfo = glm::vec4(0.0f,0.0f,0.0f,0.0f);
+
+    for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
+    float val = m_pVolume->getVoxelInterpolate(samplePos);
+    if (val > m_config.isoValue) {
+    coordInfo = getTFValue(val);
+    coordInfo.r = isoColor.r;
+    coordInfo.g = isoColor.g;
+    coordInfo.b = isoColor.b;
+    break;} // do not return the isoColor value here as the default else return statement is yellow
+    }
+    return coordInfo;
 }
 
 // ======= TODO: IMPLEMENT ========
@@ -185,6 +198,7 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 // iterations such that it does not get stuck in degerate cases.
 float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoValue) const
 {
+    
     return 0.0f;
 }
 
@@ -205,7 +219,7 @@ glm::vec4 Renderer::traceRayComposite(const Ray& ray, float sampleStep) const
         color = rgba.a*(glm::vec3 (rgba)) + (1 - rgba.a)*color;
     }
 
-    return glm::vec4 (color, 1);
+    return glm::vec4 (color, 1.0f);
 }
 
 // ======= TODO: IMPLEMENT ========
