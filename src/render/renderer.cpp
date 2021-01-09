@@ -183,8 +183,9 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
         for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, sample_pos += increment) {
             auto voxel_value = this->m_pVolume->getVoxelInterpolate(sample_pos);
             if (voxel_value > this->m_config.isoValue) {
-                color = this->getTFValue(voxel_value);
-                // color = glm::vec4 { 0.8f, 0.8f, 0.2f, 1.0f };
+
+                // color = this->getTFValue(voxel_value);
+                color = glm::vec4 { 0.8f, 0.8f, 0.2f, 1.0f };
                 break;
             }
         }
@@ -192,15 +193,21 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 
         glm::vec3 sample_pos = ray.origin + ray.tmin * ray.direction;
         const glm::vec3 increment = sampleStep * ray.direction;
+        bool atLeastTwoSteps = false;
 
         for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, sample_pos += increment) {
             auto voxel_value = this->m_pVolume->getVoxelInterpolate(sample_pos);
             if (voxel_value > this->m_config.isoValue) {
+                if (atLeastTwoSteps) {
+                    t = this->bisectionAccuracy(ray, t - sampleStep, t, this->m_config.isoValue);
+                    sample_pos = ray.origin + ray.direction * t;
+                }
                 auto _color = glm::vec4 { 0.8f, 0.8f, 0.2f, 1.0f };
                 auto gradient = this->m_pGradientVolume->getGradientVoxel(sample_pos);
                 color = glm::vec4(this->computePhongShading(_color, gradient, this->m_pCamera->position(), this->m_pCamera->position()), 1.0f);
                 break;
             }
+            atLeastTwoSteps = true;
         }
     }
 
@@ -213,7 +220,32 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 // iterations such that it does not get stuck in degerate cases.
 float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoValue) const
 {
-    return 0.0f;
+    glm::vec3 right = ray.origin + ray.tmax * ray.direction;
+
+    int maxIterations = 100;
+    const float minDifference = 0.01;
+
+    float voxelFinalValue = this->m_pVolume->getVoxelInterpolate(right);
+    float tMiddle = (t0 + t1) / 2;
+
+    while (maxIterations > 0) {
+
+        maxIterations--;
+        tMiddle = (t0 + t1) / 2;
+
+        glm::vec3 middle = ray.origin + tMiddle * ray.direction;
+        float voxelValue = this->m_pVolume->getVoxelInterpolate(middle);
+
+        if (std::abs(voxelValue - isoValue) < minDifference) {
+            return tMiddle;
+        } else if (voxelValue < isoValue) {
+            t0 = tMiddle;
+        } else {
+            t1 = tMiddle;
+        }
+    }
+
+    return tMiddle;
 }
 
 // In this function, implement 1D transfer function raycasting.
@@ -241,7 +273,7 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V)
 {
     const float ka = 0.9;
-    const float kd = 0.3;
+    const float kd = 0.7;
     const float ks = 0.2;
     const int alpha = 100;
     const int n = 100;
