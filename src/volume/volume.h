@@ -30,6 +30,7 @@ public:
 
     float getVoxelInterpolate(const glm::vec3& coord) const;
     float getVoxel(int x, int y, int z) const;
+    bool checkCoord(int x, int m_dim) const;
 
 protected:
     float getVoxelNN(const glm::vec3& coord) const;
