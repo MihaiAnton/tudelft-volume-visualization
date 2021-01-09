@@ -239,7 +239,17 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 // You are free to choose any specular power that you'd like.
 glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V)
 {
-    return glm::vec3(0.0f);
+    const float ka = 0.1;
+    const float kd = 0.7;
+    const float ks = 0.2;
+    const int alpha = 100;
+    const int n = 100;
+
+    const float theta = acos(glm::dot(gradient.dir, L)/(gradient.magnitude*glm::length(L)));
+    const float phi = acos(glm::dot(L, V)/(glm::length(L)*glm::length(L))) - theta;
+
+    return (ka + kd * cos(theta) + ks * cos(phi)) * color;
+    
 }
 
 // ======= DO NOT MODIFY THIS FUNCTION ========
