@@ -172,9 +172,9 @@ bool Volume::checkCoord(int x, int m_dim) const
 // This functions returns the results of a cubic interpolation using 4 values and a factor
 float Volume::cubicInterpolate(float g0, float g1, float g2, float g3, float factor)
 {
-    //return g1 + 0.5 * factor * (g2 - g0 + factor * (2.0 * g0 - 5.0 * g1 + 4.0 * g2 - g3 + factor * (3.0 * (g1 - g2) + g3 - g0)));
-    const int w = weight(factor);
-    return w * g0 + w * g1 + w * g2 + w * g3;
+    return g1 + 0.5 * factor * (g2 - g0 + factor * (2.0 * g0 - 5.0 * g1 + 4.0 * g2 - g3 + factor * (3.0 * (g1 - g2) + g3 - g0)));
+    /*const int w = weight(factor);
+    return w * g0 + w * g1 + w * g2 + w * g3;*/
 }
 
 // ======= TODO : IMPLEMENT ========

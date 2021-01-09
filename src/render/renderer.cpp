@@ -1,4 +1,4 @@
-#include "renderer.h"
+﻿#include "renderer.h"
 #include <algorithm>
 #include <algorithm> // std::fill
 #include <cmath>
@@ -9,6 +9,7 @@
 #include <tbb/blocked_range2d.h>
 #include <tbb/parallel_for.h>
 #include <tuple>
+#include<math.h>
 
 namespace render {
 
@@ -176,7 +177,22 @@ glm::vec4 Renderer::traceRayMIP(const Ray& ray, float sampleStep) const
 glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 {
     static constexpr glm::vec3 isoColor { 0.8f, 0.8f, 0.2f };
-    return glm::vec4(isoColor, 1.0f);
+
+    glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
+    const glm::vec3 increment = sampleStep * ray.direction;
+    glm::vec4 coordInfo = glm::vec4(0.0f,0.0f,0.0f,0.0f);
+
+    for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
+        float val = m_pVolume->getVoxelInterpolate(samplePos);
+        if (val > m_config.isoValue) {
+            coordInfo = getTFValue(val);
+            coordInfo.r = isoColor.r;
+            coordInfo.g = isoColor.g;
+            coordInfo.b = isoColor.b;
+            break;
+        }
+    }
+    return coordInfo;
 }
 
 // ======= TODO: IMPLEMENT ========
@@ -185,6 +201,18 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 // iterations such that it does not get stuck in degerate cases.
 float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoValue) const
 {
+    while (true) {
+
+        glm::vec3 newT = glm::vec3((t0 + t1) / 2);
+        if (isoValue == m_pVolume->getVoxelInterpolate(newT))
+        {
+            return newT.x;
+        } else if (isoValue > m_pVolume->getVoxelInterpolate(newT)) {
+            return bisectionAccuracy(ray, newT.x, t1, isoValue);
+        } else if (isoValue < m_pVolume->getVoxelInterpolate(newT)) {
+            return bisectionAccuracy(ray, t0, newT.x, isoValue);
+        }
+    }
     return 0.0f;
 }
 
@@ -193,7 +221,17 @@ float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoV
 // Use getTFValue to compute the color for a given volume value according to the 1D transfer function.
 glm::vec4 Renderer::traceRayComposite(const Ray& ray, float sampleStep) const
 {
-    return glm::vec4(0.0f);
+    glm::vec3 color = glm::vec3(0.0f);
+    glm::vec3 samplePos = ray.origin + ray.tmax * ray.direction;
+    const glm::vec3 decrement = sampleStep * ray.direction;
+
+    for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= decrement) {
+            const float val = m_pVolume->getVoxelInterpolate(samplePos);
+            glm::vec4 rgba = getTFValue(val);
+            color = rgba.a * (glm::vec3(rgba)) + (1 - rgba.a) * color;
+    }
+
+    return glm::vec4(color, 1.0f);
 }
 
 // ======= TODO: IMPLEMENT ========
@@ -213,7 +251,16 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 // You are free to choose any specular power that you'd like.
 glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V)
 {
-    return glm::vec3(0.0f);
+    const float ka = 0.1;
+    const float kd = 0.7;
+    const float ks = 0.2;
+    const int alpha = 100;
+    const int n = 100;
+
+    const float theta = acos(glm::dot(gradient.dir, L)/(gradient.magnitude*glm::length(L)));
+    const float phi = acos(glm::dot(L, V)/(glm::length(L)*glm::length(L))) - theta;
+
+    return (ka + kd * cos(theta) + ks * cos(phi)) * color;
 }
 
 // ======= DO NOT MODIFY THIS FUNCTION ========
