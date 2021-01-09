@@ -148,28 +148,69 @@ float Volume::linearInterpolate(float g0, float g1, float factor)
 // This function represents the h(x) function, which returns the weight of the cubic interpolation kernel for a given position x
 float Volume::weight(float x)
 {
-    return 0.0f;
+    const float a = -0.75;
+    const float x1 = abs(x);
+    float h;
+    if ((x1>=0)&&(x1<1)){h = (a + 2) * pow(x1,3) - (a + 3) * pow(x1,2) + 1;}
+    else if ((x1>=1)&&(x1<2)){h = a*pow(x1,3) - 5*a*pow(x1,2) + 8*a*x1 - 4*a;}
+    else if (x1>=2){h = 0;}
+
+    //float value = pow(factor, 3) * (-0.5 * g0 + 1.5 * g1 - 1.5 * g2 + 0.5 * g3) + pow(factor, 2) * (g0 - 2.5 * g1 + 2 * g2 - 0.5 * g3) + factor * (-0.5 * g0 + 0.5 * g2) + g1;
+    //return value;
+    return h;
 }
 
 // ======= TODO : IMPLEMENT ========
 // This functions returns the results of a cubic interpolation using 4 values and a factor
 float Volume::cubicInterpolate(float g0, float g1, float g2, float g3, float factor)
 {
-    return 0.0f;
+    return weight(factor)*g0 + weight(factor)*g1 + weight(factor)*g2 + weight(factor)*g3;
 }
 
 // ======= TODO : IMPLEMENT ========
 // This function returns the value of a bicubic interpolation
+bool checkcoord(int x, int m_dim){
+    return (((x)>0) && ((x)<m_dim -1));
+}
+
 float Volume::bicubicInterpolateXY(const glm::vec2& xyCoord, int z) const
 {
-    return 0.0f;
+    const int x = static_cast<int>(xyCoord.x);
+    const int y = static_cast<int>(xyCoord.y);
+    
+    const float fac_x = xyCoord.x - float(x);
+    const float fac_y = xyCoord.y - float(y);
+
+
+
+    const float t0 = (checkcoord(x-1, m_dim.x) && checkcoord(x+1, m_dim.x) && checkcoord(x+2, m_dim.x) && checkcoord(y-1, m_dim.y)) ? cubicInterpolate(getVoxel(x-1, y-1, z), getVoxel(x, y-1, z), getVoxel(x+1, y-1, z), getVoxel(x+2, y-1, z), fac_x) : 0.0f;
+    const float t1 = (checkcoord(x-1, m_dim.x) && checkcoord(x+1, m_dim.x) && checkcoord(x+2, m_dim.x) && checkcoord(y+1, m_dim.y)) ? cubicInterpolate(getVoxel(x-1, y + 1, z), getVoxel(x, y + 1, z), getVoxel(x+1, y + 1, z), getVoxel(x+2, y + 1, z), fac_x) : 0.0f;
+    const float t2 = (checkcoord(x-1, m_dim.x) && checkcoord(x+1, m_dim.x) && checkcoord(x+2, m_dim.x)) ? cubicInterpolate(getVoxel(x-1, y, z), getVoxel(x, y, z), getVoxel(x+1, y, z), getVoxel(x+2, y, z), fac_x) : 0.0f;
+    const float t3 = (checkcoord(x-1, m_dim.x) && checkcoord(x+1, m_dim.x) && checkcoord(x+2, m_dim.x) && checkcoord(y+2, m_dim.y)) ? cubicInterpolate(getVoxel(x-1, y+2, z), getVoxel(x, y + 2, z), getVoxel(x+1, y+2, z), getVoxel(x+2, y+2, z), fac_x) : 0.0f;
+
+    const float t4 = cubicInterpolate(t0, t1, t2, t3, fac_y);
+    return t4;
 }
 
 // ======= TODO : IMPLEMENT ========
 // This function computes the tricubic interpolation at coord
 float Volume::getVoxelTriCubicInterpolate(const glm::vec3& coord) const
 {
-    return 0.0f;
+    if (glm::any(glm::lessThan(coord, glm::vec3(0))) || glm::any(glm::greaterThanEqual(coord, glm::vec3(m_dim - 1))))
+        return 0.0f;
+    
+    const int z = static_cast<int>(coord.z);
+    const float fac_z = coord.z - float(z);
+    glm::vec2 coordXY;
+    coordXY.x = coord.x; coordXY.y = coord.y; 
+
+    const float t0 = (checkcoord(z-1, m_dim.z)) ? bicubicInterpolateXY(coordXY, z-1) : 0.0f;
+    const float t1 = bicubicInterpolateXY(coordXY, z);
+    const float t2 = (checkcoord(z+1, m_dim.z)) ? bicubicInterpolateXY(coordXY, z+1) : 0.0f;
+    const float t3 = (checkcoord(z+2, m_dim.z)) ? bicubicInterpolateXY(coordXY, z+2) : 0.0f;
+
+    const float t4 = cubicInterpolate(t0,t1,t2,t3,fac_z);
+    return t4 < 0 ? 0 : t4;
 }
 
 // Load an fld volume data file
