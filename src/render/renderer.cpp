@@ -368,7 +368,8 @@ float Renderer::getTF2DOpacity(float intensity, float gradientMagnitude) const
     }
 
     if (gradientMagnitude >= triangleGradientBoundary) { // inside the triangle
-        return 1.0f;
+        // at this moment triangleGradientBoundary is the point above intensity where the triangle gets intersected
+        return (gradientMagnitude - triangleGradientBoundary);
     } else {
         return 0.0f;
     }
