@@ -299,15 +299,15 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
     glm::vec3 color(0.0f);
 
     for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= increment) {
-        glm::vec4 tf2d_color = this->m_config.TF2DColor;
         float intensity = this->m_pVolume->getVoxelInterpolate(samplePos);
-        float gradientMagintude = this->m_pGradientVolume->getGradientVoxel(samplePos).magnitude;
-        float opacity = this->getTF2DOpacity(intensity, gradientMagintude);
+        auto gradient = this->m_pGradientVolume->getGradientVoxel(samplePos);
+        float opacity = this->getTF2DOpacity(intensity, gradient.magnitude);
+        auto _color = glm::vec3(this->m_config.TF2DColor);
 
-        color = opacity * glm::vec3(tf2d_color) + (1 - opacity) * color;
+        color = opacity * _color + (1 - opacity) * color;
     }
 
-    return glm::vec4(color, 1);
+    return glm::vec4(color, 0.5f);
 }
 
 // ======= TODO: IMPLEMENT ========
@@ -342,6 +342,35 @@ glm::vec4 Renderer::getTFValue(float val) const
     return m_config.tfColorMap[i];
 }
 
+/**
+ *  Checks if the point (intensity, magnitude) is in the triangle defined by the points 
+ *          (leftIntensity, 255), (midIntensity, 0), (rightIntensity, 255)
+*/
+bool inTriangle(float leftIntensity, float midIntensity, float rightIntensity, float intensity, float magnitude)
+{
+    if (intensity <= leftIntensity || intensity >= rightIntensity || magnitude <= 0) {
+        return false;
+    }
+
+    if (intensity == midIntensity) {
+        return true;
+    } else if (intensity < midIntensity) { // left side
+        return magnitude > (255 * (midIntensity - intensity) / (midIntensity - leftIntensity));
+    } else { // right side
+        return magnitude > (255 * ((intensity - midIntensity) / (rightIntensity - midIntensity)));
+    }
+}
+
+/**
+ *  Computes the opacity based on the in-triangle position 
+ * 
+*/
+float linearOpacity(float intensityCenter, float radius, float intensity, float magnitude)
+{
+    float horizontalWidth = radius * (magnitude / 255);
+    return 1 - (abs(intensityCenter - intensity) / horizontalWidth);
+}
+
 // ======= TODO: IMPLEMENT ========
 // This function should return an opacity value for the given intensity and gradient according to the 2D transfer function.
 // Calculate whether the values are within the radius/intensity triangle defined in the 2D transfer function widget.
@@ -351,29 +380,13 @@ glm::vec4 Renderer::getTFValue(float val) const
 // The 2D transfer function settings can be accessed through m_config.TF2DIntensity and m_config.TF2DRadius.
 float Renderer::getTF2DOpacity(float intensity, float gradientMagnitude) const
 {
-    float triangleGradientBoundary = 0.0f;
-    // based on the intensity of the point, compute the triangle gradient for that x=intensity line
-    // if the given gradient is above, then it is in the triangle; if below, it is out of the triangle
-    if (intensity < this->m_config.TF2DIntensity) { // left side of the triangle
-        float maxIntensity = this->m_config.TF2DIntensity - this->m_config.TF2DRadius;
-        triangleGradientBoundary = 0.0f;
-        triangleGradientBoundary += this->m_pGradientVolume->maxMagnitude() * ((this->m_config.TF2DIntensity - intensity) / this->m_config.TF2DRadius);
-        triangleGradientBoundary += this->m_pGradientVolume->minMagnitude() * ((intensity - maxIntensity) / this->m_config.TF2DRadius);
-
-    } else { // right side of the triangle (also covers the case when the intensity is exactly the one configures)
-        float maxIntensity = this->m_config.TF2DIntensity + this->m_config.TF2DRadius;
-        triangleGradientBoundary = 0.0f;
-        triangleGradientBoundary += this->m_pGradientVolume->maxMagnitude() * ((intensity - this->m_config.TF2DIntensity) / this->m_config.TF2DRadius);
-        triangleGradientBoundary += this->m_pGradientVolume->minMagnitude() * ((maxIntensity - intensity) / this->m_config.TF2DRadius);
-    }
-
-    if (gradientMagnitude >= triangleGradientBoundary) { // inside the triangle
+    if (inTriangle(intensity - this->m_config.TF2DRadius, this->m_config.TF2DIntensity, intensity + this->m_config.TF2DRadius, intensity, gradientMagnitude)) { // inside the triangle
         // at this moment triangleGradientBoundary is the point above intensity where the triangle gets intersected
-        return (gradientMagnitude - triangleGradientBoundary);
+        return linearOpacity(this->m_config.TF2DIntensity, this->m_config.TF2DRadius, intensity, gradientMagnitude);
+        // return 1;
     } else {
         return 0.0f;
     }
-
     return 0.0f;
 }
 
