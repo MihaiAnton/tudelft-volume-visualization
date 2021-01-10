@@ -183,7 +183,6 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
         for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, sample_pos += increment) {
             auto voxel_value = this->m_pVolume->getVoxelInterpolate(sample_pos);
             if (voxel_value > this->m_config.isoValue) {
-
                 // color = this->getTFValue(voxel_value);
                 color = glm::vec4 { 0.8f, 0.8f, 0.2f, 1.0f };
                 break;
@@ -204,7 +203,7 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
                 }
                 auto _color = glm::vec4 { 0.8f, 0.8f, 0.2f, 1.0f };
                 auto gradient = this->m_pGradientVolume->getGradientVoxel(sample_pos);
-                color = glm::vec4(this->computePhongShading(_color, gradient, this->m_pCamera->position(), this->m_pCamera->position()), 1.0f);
+                color = glm::vec4(this->computePhongShading(_color, gradient, this->m_pCamera->position(), ray.origin), 1.0f);
                 break;
             }
             atLeastTwoSteps = true;
@@ -214,7 +213,6 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
     return color;
 }
 
-// ======= TODO: IMPLEMENT ========
 // Given that the iso value lies somewhere between t0 and t1, find a t for which the value
 // closely matches the iso value (less than 0.01 difference). Add a limit to the number of
 // iterations such that it does not get stuck in degerate cases.
@@ -295,7 +293,21 @@ glm::vec4 Renderer::frontToBackCompositing(const Ray& ray, float sampleStep) con
 // Use the getTF2DOpacity function that you implemented to compute the opacity according to the 2D transfer function.
 glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 {
-    return glm::vec4(0.0f);
+    glm::vec3 samplePos = ray.origin + ray.tmax * ray.direction;
+    const glm::vec3 increment = sampleStep * ray.direction;
+
+    glm::vec3 color(0.0f);
+
+    for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= increment) {
+        glm::vec4 tf2d_color = this->m_config.TF2DColor;
+        float intensity = this->m_pVolume->getVoxelInterpolate(samplePos);
+        float gradientMagintude = this->m_pGradientVolume->getGradientVoxel(samplePos).magnitude;
+        float opacity = this->getTF2DOpacity(intensity, gradientMagintude);
+
+        color = opacity * glm::vec3(tf2d_color) + (1 - opacity) * color;
+    }
+
+    return glm::vec4(color, 1);
 }
 
 // ======= TODO: IMPLEMENT ========
@@ -307,7 +319,7 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 // You are free to choose any specular power that you'd like.
 glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V)
 {
-    const float ka = 0.9;
+    const float ka = 1;
     const float kd = 0.7;
     const float ks = 0.2;
     const int alpha = 100;
@@ -339,6 +351,28 @@ glm::vec4 Renderer::getTFValue(float val) const
 // The 2D transfer function settings can be accessed through m_config.TF2DIntensity and m_config.TF2DRadius.
 float Renderer::getTF2DOpacity(float intensity, float gradientMagnitude) const
 {
+    float triangleGradientBoundary = 0.0f;
+    // based on the intensity of the point, compute the triangle gradient for that x=intensity line
+    // if the given gradient is above, then it is in the triangle; if below, it is out of the triangle
+    if (intensity < this->m_config.TF2DIntensity) { // left side of the triangle
+        float maxIntensity = this->m_config.TF2DIntensity - this->m_config.TF2DRadius;
+        triangleGradientBoundary = 0.0f;
+        triangleGradientBoundary += this->m_pGradientVolume->maxMagnitude() * ((this->m_config.TF2DIntensity - intensity) / this->m_config.TF2DRadius);
+        triangleGradientBoundary += this->m_pGradientVolume->minMagnitude() * ((intensity - maxIntensity) / this->m_config.TF2DRadius);
+
+    } else { // right side of the triangle (also covers the case when the intensity is exactly the one configures)
+        float maxIntensity = this->m_config.TF2DIntensity + this->m_config.TF2DRadius;
+        triangleGradientBoundary = 0.0f;
+        triangleGradientBoundary += this->m_pGradientVolume->maxMagnitude() * ((intensity - this->m_config.TF2DIntensity) / this->m_config.TF2DRadius);
+        triangleGradientBoundary += this->m_pGradientVolume->minMagnitude() * ((maxIntensity - intensity) / this->m_config.TF2DRadius);
+    }
+
+    if (gradientMagnitude >= triangleGradientBoundary) { // inside the triangle
+        return 1.0f;
+    } else {
+        return 0.0f;
+    }
+
     return 0.0f;
 }
 
