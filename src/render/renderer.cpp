@@ -220,8 +220,8 @@ float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoV
 {
     glm::vec3 right = ray.origin + ray.tmax * ray.direction;
 
-    int maxIterations = 100;
-    const float minDifference = 0.01;
+    int maxIterations = 500;
+    const float minDifference = 0.0001;
 
     float voxelFinalValue = this->m_pVolume->getVoxelInterpolate(right);
     float tMiddle = (t0 + t1) / 2;
@@ -264,6 +264,9 @@ glm::vec4 Renderer::backToFrontComposite(const Ray& ray, float sampleStep) const
     for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= increment) {
         glm::vec4 tf_value = this->getTFValue(this->m_pVolume->getVoxelInterpolate(samplePos));
         color = tf_value[3] * glm::vec3(tf_value) + (1 - tf_value[3]) * color;
+        if (this->m_config.volumeShading) {
+            color = glm::vec4(this->computePhongShading(glm::vec3(color), this->m_pGradientVolume->getGradientVoxel(samplePos), this->m_pCamera->position(), ray.origin), 1.0f);
+        }
     }
 
     return glm::vec4(color, 1);
@@ -319,16 +322,21 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 // You are free to choose any specular power that you'd like.
 glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V)
 {
-    const float ka = 1;
+    const float ka = 0.1;
     const float kd = 0.7;
-    const float ks = 0.2;
+    const float ks = 0.5;
     const int alpha = 100;
     const int n = 100;
 
-    const float theta = acos(glm::dot(gradient.dir, L) / (gradient.magnitude * glm::length(L)));
-    const float phi = acos(glm::dot(L, V) / (glm::length(L) * glm::length(L))) - theta;
+    auto _L = L * float(-1.0);
+
+    const float theta
+        = acos(glm::dot(gradient.dir, _L) / (gradient.magnitude * glm::length(_L)));
+    const float phi = acos(glm::dot(L, V) / (glm::length(L) * glm::length(V))) - 2 * theta;
 
     return (ka + kd * cos(theta) + ks * cos(phi)) * color;
+
+    // return (ka + kd * glm::dot(gradient.dir, L) + ks * glm::dot(L, V) / (glm::length(L) * glm::length(V))) * color;
 }
 
 // ======= DO NOT MODIFY THIS FUNCTION ========
