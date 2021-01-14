@@ -175,23 +175,34 @@ glm::vec4 Renderer::traceRayMIP(const Ray& ray, float sampleStep) const
 // Use the bisectionAccuracy function (to be implemented) to get a more precise isosurface location between two steps.
 glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 {
-    static constexpr glm::vec3 isoColor { 0.8f, 0.8f, 0.2f };
+    static constexpr glm::vec4 isoColor { 0.8f, 0.8f, 0.2f, 1.0f };
     glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
     const glm::vec3 increment = sampleStep * ray.direction;
     glm::vec4 coordInfo = glm::vec4(0.0f,0.0f,0.0f,0.0f);
 
-    for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
-    float val = m_pVolume->getVoxelInterpolate(samplePos);
-    if (val > m_config.isoValue) {
-    coordInfo = getTFValue(val);
-    coordInfo.r = isoColor.r;
-    coordInfo.g = isoColor.g;
-    coordInfo.b = isoColor.b;
-    break;} // do not return the isoColor value here as the default else return statement is yellow
-    }
+    if(!m_config.volumeShading){
+        for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
+        float val = m_pVolume->getVoxelInterpolate(samplePos);
+        if (val > m_config.isoValue) {
+        coordInfo = getTFValue(val);
+        coordInfo.r = isoColor.r;
+        coordInfo.g = isoColor.g;
+        coordInfo.b = isoColor.b;
+        break;} // do not return the isoColor value here as the default else return statement is yellow
+        }
+}
+    else{
+       for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
+        float val = m_pVolume->getVoxelInterpolate(samplePos);
+        if (val > m_config.isoValue) {
+        auto grad = m_pGradientVolume->getGradientVoxel(samplePos);
+        coordInfo = glm::vec4(computePhongShading(isoColor, grad, m_pCamera->position(), m_pCamera->position(), 1.0f));
+        break;
+        }
+        } 
+}
     return coordInfo;
 }
-
 // ======= TODO: IMPLEMENT ========
 // Given that the iso value lies somewhere between t0 and t1, find a t for which the value
 // closely matches the iso value (less than 0.01 difference). Add a limit to the number of
@@ -227,7 +238,19 @@ glm::vec4 Renderer::traceRayComposite(const Ray& ray, float sampleStep) const
 // Use the getTF2DOpacity function that you implemented to compute the opacity according to the 2D transfer function.
 glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 {
-    return glm::vec4(0.0f);
+    glm::vec3 color(0.0f);
+    glm::vec3 samplePos = ray.origin + ray.tmax * ray.direction;
+    const glm::vec3 increment = sampleStep * ray.direction;
+    for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= increment) {
+        float intensity = m_pVolume->getVoxelInterpolate(samplePos);
+        auto gradient = m_pGradientVolume->getGradientVoxel(samplePos);
+        float a = getTF2DOpacity(intensity, gradient.magnitude);
+        auto rgb = glm::vec3(m_config.TF2DColor);
+
+        color = a * rgb + (1 - a) * color;
+    }
+
+    return glm::vec4(color, 0.5f);
 }
 
 // ======= TODO: IMPLEMENT ========
@@ -272,6 +295,17 @@ glm::vec4 Renderer::getTFValue(float val) const
 // The 2D transfer function settings can be accessed through m_config.TF2DIntensity and m_config.TF2DRadius.
 float Renderer::getTF2DOpacity(float intensity, float gradientMagnitude) const
 {
+    auto a = intensity - m_config.TF2DRadius;
+    auto b = m_config.TF2DIntensity;
+    auto c = intensity + m_config.TF2DRadius;
+    
+    if (intensity<b && gradientMagnitude>((b-intensity)/(b-a))) {
+        return 1-(abs(m_config.TF2DIntensity-intensity)/(m_config.TF2DRadius*gradientMagnitude/255));
+    } 
+    else if (intensity>b && gradientMagnitude>((intensity-b)/(c-b))){return 1-(abs(m_config.TF2DIntensity-intensity)/(m_config.TF2DRadius*gradientMagnitude/255));}
+    else {
+        return 0.0f;
+    }
     return 0.0f;
 }
 
