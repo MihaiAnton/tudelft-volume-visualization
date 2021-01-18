@@ -203,7 +203,7 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
                 }
                 auto _color = glm::vec4 { 0.8f, 0.8f, 0.2f, 1.0f };
                 auto gradient = this->m_pGradientVolume->getGradientVoxel(sample_pos);
-                color = glm::vec4(this->computePhongShading(_color, gradient, this->m_pCamera->position(), ray.origin), 1.0f);
+                color = glm::vec4(this->computePhongShading(_color, gradient, this->m_pCamera->position(), ray.direction), 1.0f);
                 break;
             }
             atLeastTwoSteps = true;
@@ -263,10 +263,12 @@ glm::vec4 Renderer::backToFrontComposite(const Ray& ray, float sampleStep) const
 
     for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= increment) {
         glm::vec4 tf_value = this->getTFValue(this->m_pVolume->getVoxelInterpolate(samplePos));
-        color = tf_value[3] * glm::vec3(tf_value) + (1 - tf_value[3]) * color;
+        glm::vec3 current_color = glm::vec3(tf_value);
         if (this->m_config.volumeShading) {
-            color = glm::vec4(this->computePhongShading(glm::vec3(color), this->m_pGradientVolume->getGradientVoxel(samplePos), this->m_pCamera->position(), ray.origin), 1.0f);
+            auto gradient = this->m_pGradientVolume->getGradientVoxel(samplePos);
+            current_color = computePhongShading(current_color, gradient, this->m_pCamera->position(), ray.direction);
         }
+        color = tf_value[3] * current_color + (1 - tf_value[3]) * color;
     }
 
     return glm::vec4(color, 1);
@@ -307,6 +309,10 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
         float opacity = this->getTF2DOpacity(intensity, gradient.magnitude);
         auto _color = glm::vec3(this->m_config.TF2DColor);
 
+        if (this->m_config.volumeShading) {
+            _color = computePhongShading(_color, gradient, m_pCamera->position(), ray.direction);
+        }
+
         color = opacity * _color + (1 - opacity) * color;
     }
 
@@ -324,19 +330,14 @@ glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::Gr
 {
     const float ka = 0.1;
     const float kd = 0.7;
-    const float ks = 0.5;
+    const float ks = 0.2;
     const int alpha = 100;
     const int n = 100;
 
-    auto _L = L * float(-1.0);
+    const float theta = acos(glm::dot(gradient.dir, -L) / (gradient.magnitude * glm::length(L)));
+    const float phi = acos(glm::dot(gradient.dir, V) / (gradient.magnitude * glm::length(V))) - theta;
 
-    const float theta
-        = acos(glm::dot(gradient.dir, _L) / (gradient.magnitude * glm::length(_L)));
-    const float phi = acos(glm::dot(L, V) / (glm::length(L) * glm::length(V))) - 2 * theta;
-
-    return (ka + kd * cos(theta) + ks * cos(phi)) * color;
-
-    // return (ka + kd * glm::dot(gradient.dir, L) + ks * glm::dot(L, V) / (glm::length(L) * glm::length(V))) * color;
+    return (ka + kd * cos(theta) + ks * float(pow(cos(phi), n))) * color;
 }
 
 // ======= DO NOT MODIFY THIS FUNCTION ========
