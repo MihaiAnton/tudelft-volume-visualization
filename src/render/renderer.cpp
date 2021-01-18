@@ -176,22 +176,48 @@ glm::vec4 Renderer::traceRayMIP(const Ray& ray, float sampleStep) const
 // Use the bisectionAccuracy function (to be implemented) to get a more precise isosurface location between two steps.
 glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 {
-    static constexpr glm::vec3 isoColor { 0.8f, 0.8f, 0.2f };
+    static constexpr glm::vec4 isoColor { 0.8f, 0.8f, 0.2f, 1.0f };
 
     glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
     const glm::vec3 increment = sampleStep * ray.direction;
     glm::vec4 coordInfo = glm::vec4(0.0f,0.0f,0.0f,0.0f);
 
-    for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
-        float val = m_pVolume->getVoxelInterpolate(samplePos);
-        if (val > m_config.isoValue) {
-            coordInfo = getTFValue(val);
-            coordInfo.r = isoColor.r;
-            coordInfo.g = isoColor.g;
-            coordInfo.b = isoColor.b;
-            break;
+    
+
+    if (!m_config.volumeShading) {
+
+        for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
+            float val = m_pVolume->getVoxelInterpolate(samplePos);
+            if (val > m_config.isoValue) {
+                coordInfo = getTFValue(val);
+                coordInfo.r = isoColor.r;
+                coordInfo.g = isoColor.g;
+                coordInfo.b = isoColor.b;
+                break;
+            }
+        }
+
+    } else {
+
+        glm::vec3 sample_pos = ray.origin + ray.tmin * ray.direction;
+        const glm::vec3 increment = sampleStep * ray.direction;
+        bool atLeastTwoSteps = false;
+
+        for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, sample_pos += increment) {
+            auto voxel_value = m_pVolume->getVoxelInterpolate(sample_pos);
+            if (voxel_value > m_config.isoValue) {
+                if (atLeastTwoSteps) {
+                    t = bisectionAccuracy(ray, t - sampleStep, t, m_config.isoValue);
+                    sample_pos = ray.origin + ray.direction * t;
+                }
+                auto gradient = m_pGradientVolume->getGradientVoxel(sample_pos);
+                coordInfo = glm::vec4(computePhongShading(isoColor, gradient, m_pCamera->position(), ray.direction), 1.0f);
+                break;
+            }
+            atLeastTwoSteps = true;
         }
     }
+
     return coordInfo;
 }
 
@@ -201,19 +227,32 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 // iterations such that it does not get stuck in degerate cases.
 float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoValue) const
 {
-    while (true) {
+    glm::vec3 right = ray.origin + ray.tmax * ray.direction;
 
-        glm::vec3 newT = glm::vec3((t0 + t1) / 2);
-        if (isoValue == m_pVolume->getVoxelInterpolate(newT))
-        {
-            return newT.x;
-        } else if (isoValue > m_pVolume->getVoxelInterpolate(newT)) {
-            return bisectionAccuracy(ray, newT.x, t1, isoValue);
-        } else if (isoValue < m_pVolume->getVoxelInterpolate(newT)) {
-            return bisectionAccuracy(ray, t0, newT.x, isoValue);
+    int maxIterations = 500;
+    const float minDifference = 0.0001;
+
+    float voxelFinalValue = this->m_pVolume->getVoxelInterpolate(right);
+    float tMiddle = (t0 + t1) / 2;
+
+    while (maxIterations > 0) {
+
+        maxIterations--;
+        tMiddle = (t0 + t1) / 2;
+
+        glm::vec3 middle = ray.origin + tMiddle * ray.direction;
+        float voxelValue = this->m_pVolume->getVoxelInterpolate(middle);
+
+        if (std::abs(voxelValue - isoValue) < minDifference) {
+            return tMiddle;
+        } else if (voxelValue < isoValue) {
+            t0 = tMiddle;
+        } else {
+            t1 = tMiddle;
         }
     }
-    return 0.0f;
+
+    return tMiddle;
 }
 
 // ======= TODO: IMPLEMENT ========
@@ -256,11 +295,11 @@ glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::Gr
     const float ks = 0.2;
     const int alpha = 100;
     const int n = 100;
+    
+    const float theta = acos(glm::dot(gradient.dir, -L)/(gradient.magnitude*glm::length(L)));
+    const float phi = acos(glm::dot(gradient.dir, V) / (gradient.magnitude * glm::length(V))) - theta;
 
-    const float theta = acos(glm::dot(gradient.dir, L)/(gradient.magnitude*glm::length(L)));
-    const float phi = acos(glm::dot(L, V)/(glm::length(L)*glm::length(L))) - theta;
-
-    return (ka + kd * cos(theta) + ks * cos(phi)) * color;
+    return (ka + kd * cos(theta) + ks * float(pow(cos(phi), n))) * color;
 }
 
 // ======= DO NOT MODIFY THIS FUNCTION ========
