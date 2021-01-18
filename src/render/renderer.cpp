@@ -69,7 +69,7 @@ void Renderer::render()
     const Bounds bounds { glm::vec3(0.0f), glm::vec3(m_pVolume->dims() - glm::ivec3(1)) };
 
     // 0 = sequential (single-core), 1 = TBB (multi-core)
-#ifdef NDEBUG
+#if true // TODO change back to #ifdef NDEBUG
     // If NOT in debug mode then enable parallelism using the TBB library (Intel Threaded Building Blocks).
 #define PARALLELISM 1
 #else
@@ -167,7 +167,7 @@ glm::vec4 Renderer::traceRayMIP(const Ray& ray, float sampleStep) const
     return glm::vec4(glm::vec3(maxVal) / m_pVolume->maximum(), 1.0f);
 }
 
-// ======= TODO: IMPLEMENT ========
+// ======= TODO: check phong parameters ========
 // This function should find the position where the ray intersects with the volume's isosurface.
 // If volume shading is DISABLED then simply return the isoColor.
 // If volume shading is ENABLED then return the phong-shaded color at that location using the local gradient (from m_pGradientVolume).
@@ -175,17 +175,75 @@ glm::vec4 Renderer::traceRayMIP(const Ray& ray, float sampleStep) const
 // Use the bisectionAccuracy function (to be implemented) to get a more precise isosurface location between two steps.
 glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 {
-    static constexpr glm::vec3 isoColor { 0.8f, 0.8f, 0.2f };
-    return glm::vec4(isoColor, 1.0f);
+    glm::vec4 color(0.0f);
+    if (!this->m_config.volumeShading) {
+        glm::vec3 sample_pos = ray.origin + ray.tmin * ray.direction;
+        const glm::vec3 increment = sampleStep * ray.direction;
+
+        for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, sample_pos += increment) {
+            auto voxel_value = this->m_pVolume->getVoxelInterpolate(sample_pos);
+            if (voxel_value > this->m_config.isoValue) {
+                // color = this->getTFValue(voxel_value);
+                color = glm::vec4 { 0.8f, 0.8f, 0.2f, 1.0f };
+                break;
+            }
+        }
+    } else {
+
+        glm::vec3 sample_pos = ray.origin + ray.tmin * ray.direction;
+        const glm::vec3 increment = sampleStep * ray.direction;
+        bool atLeastTwoSteps = false;
+
+        for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, sample_pos += increment) {
+            auto voxel_value = this->m_pVolume->getVoxelInterpolate(sample_pos);
+            if (voxel_value > this->m_config.isoValue) {
+                if (atLeastTwoSteps) {
+                    t = this->bisectionAccuracy(ray, t - sampleStep, t, this->m_config.isoValue);
+                    sample_pos = ray.origin + ray.direction * t;
+                }
+                auto _color = glm::vec4 { 0.8f, 0.8f, 0.2f, 1.0f };
+                auto gradient = this->m_pGradientVolume->getGradientVoxel(sample_pos);
+                color = glm::vec4(this->computePhongShading(_color, gradient, this->m_pCamera->position(), ray.direction), 1.0f);
+                break;
+            }
+            atLeastTwoSteps = true;
+        }
+    }
+
+    return color;
 }
 
-// ======= TODO: IMPLEMENT ========
 // Given that the iso value lies somewhere between t0 and t1, find a t for which the value
 // closely matches the iso value (less than 0.01 difference). Add a limit to the number of
 // iterations such that it does not get stuck in degerate cases.
 float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoValue) const
 {
-    return 0.0f;
+    glm::vec3 right = ray.origin + ray.tmax * ray.direction;
+
+    int maxIterations = 500;
+    const float minDifference = 0.0001;
+
+    float voxelFinalValue = this->m_pVolume->getVoxelInterpolate(right);
+    float tMiddle = (t0 + t1) / 2;
+
+    while (maxIterations > 0) {
+
+        maxIterations--;
+        tMiddle = (t0 + t1) / 2;
+
+        glm::vec3 middle = ray.origin + tMiddle * ray.direction;
+        float voxelValue = this->m_pVolume->getVoxelInterpolate(middle);
+
+        if (std::abs(voxelValue - isoValue) < minDifference) {
+            return tMiddle;
+        } else if (voxelValue < isoValue) {
+            t0 = tMiddle;
+        } else {
+            t1 = tMiddle;
+        }
+    }
+
+    return tMiddle;
 }
 
 // In this function, implement 1D transfer function raycasting.
@@ -205,7 +263,12 @@ glm::vec4 Renderer::backToFrontComposite(const Ray& ray, float sampleStep) const
 
     for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= increment) {
         glm::vec4 tf_value = this->getTFValue(this->m_pVolume->getVoxelInterpolate(samplePos));
-        color = tf_value[3] * glm::vec3(tf_value) + (1 - tf_value[3]) * color;
+        glm::vec3 current_color = glm::vec3(tf_value);
+        if (this->m_config.volumeShading) {
+            auto gradient = this->m_pGradientVolume->getGradientVoxel(samplePos);
+            current_color = computePhongShading(current_color, gradient, this->m_pCamera->position(), ray.direction);
+        }
+        color = tf_value[3] * current_color + (1 - tf_value[3]) * color;
     }
 
     return glm::vec4(color, 1);
@@ -235,7 +298,25 @@ glm::vec4 Renderer::frontToBackCompositing(const Ray& ray, float sampleStep) con
 // Use the getTF2DOpacity function that you implemented to compute the opacity according to the 2D transfer function.
 glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 {
-    return glm::vec4(0.0f);
+    glm::vec3 samplePos = ray.origin + ray.tmax * ray.direction;
+    const glm::vec3 increment = sampleStep * ray.direction;
+
+    glm::vec3 color(0.0f);
+
+    for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= increment) {
+        float intensity = this->m_pVolume->getVoxelInterpolate(samplePos);
+        auto gradient = this->m_pGradientVolume->getGradientVoxel(samplePos);
+        float opacity = this->getTF2DOpacity(intensity, gradient.magnitude);
+        auto _color = glm::vec3(this->m_config.TF2DColor);
+
+        if (this->m_config.volumeShading) {
+            _color = computePhongShading(_color, gradient, m_pCamera->position(), ray.direction);
+        }
+
+        color = opacity * _color + (1 - opacity) * color;
+    }
+
+    return glm::vec4(color, 0.5f);
 }
 
 // ======= TODO: IMPLEMENT ========
@@ -247,7 +328,16 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 // You are free to choose any specular power that you'd like.
 glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V)
 {
-    return glm::vec3(0.0f);
+    const float ka = 0.1;
+    const float kd = 0.7;
+    const float ks = 0.2;
+    const int alpha = 100;
+    const int n = 100;
+
+    const float theta = acos(glm::dot(gradient.dir, -L) / (gradient.magnitude * glm::length(L)));
+    const float phi = acos(glm::dot(gradient.dir, V) / (gradient.magnitude * glm::length(V))) - theta;
+
+    return (ka + kd * cos(theta) + ks * float(pow(cos(phi), n))) * color;
 }
 
 // ======= DO NOT MODIFY THIS FUNCTION ========
@@ -261,6 +351,35 @@ glm::vec4 Renderer::getTFValue(float val) const
     return m_config.tfColorMap[i];
 }
 
+/**
+ *  Checks if the point (intensity, magnitude) is in the triangle defined by the points 
+ *          (leftIntensity, 255), (midIntensity, 0), (rightIntensity, 255)
+*/
+bool inTriangle(float leftIntensity, float midIntensity, float rightIntensity, float intensity, float magnitude)
+{
+    if (intensity <= leftIntensity || intensity >= rightIntensity || magnitude <= 0) {
+        return false;
+    }
+
+    if (intensity == midIntensity) {
+        return true;
+    } else if (intensity < midIntensity) { // left side
+        return magnitude > (255 * (midIntensity - intensity) / (midIntensity - leftIntensity));
+    } else { // right side
+        return magnitude > (255 * ((intensity - midIntensity) / (rightIntensity - midIntensity)));
+    }
+}
+
+/**
+ *  Computes the opacity based on the in-triangle position 
+ * 
+*/
+float linearOpacity(float intensityCenter, float radius, float intensity, float magnitude)
+{
+    float horizontalWidth = radius * (magnitude / 255);
+    return 1 - (abs(intensityCenter - intensity) / horizontalWidth);
+}
+
 // ======= TODO: IMPLEMENT ========
 // This function should return an opacity value for the given intensity and gradient according to the 2D transfer function.
 // Calculate whether the values are within the radius/intensity triangle defined in the 2D transfer function widget.
@@ -270,6 +389,13 @@ glm::vec4 Renderer::getTFValue(float val) const
 // The 2D transfer function settings can be accessed through m_config.TF2DIntensity and m_config.TF2DRadius.
 float Renderer::getTF2DOpacity(float intensity, float gradientMagnitude) const
 {
+    if (inTriangle(intensity - this->m_config.TF2DRadius, this->m_config.TF2DIntensity, intensity + this->m_config.TF2DRadius, intensity, gradientMagnitude)) { // inside the triangle
+        // at this moment triangleGradientBoundary is the point above intensity where the triangle gets intersected
+        return linearOpacity(this->m_config.TF2DIntensity, this->m_config.TF2DRadius, intensity, gradientMagnitude);
+        // return 1;
+    } else {
+        return 0.0f;
+    }
     return 0.0f;
 }
 
