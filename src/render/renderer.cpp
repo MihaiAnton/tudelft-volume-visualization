@@ -69,7 +69,7 @@ void Renderer::render()
     const Bounds bounds { glm::vec3(0.0f), glm::vec3(m_pVolume->dims() - glm::ivec3(1)) };
 
     // 0 = sequential (single-core), 1 = TBB (multi-core)
-#if true // TODO change back to #ifdef NDEBUG
+#ifdef NDEBUG 
     // If NOT in debug mode then enable parallelism using the TBB library (Intel Threaded Building Blocks).
 #define PARALLELISM 1
 #else
