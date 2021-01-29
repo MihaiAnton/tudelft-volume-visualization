@@ -249,7 +249,6 @@ float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoV
 // Use getTFValue to compute the color for a given volume value according to the 1D transfer function.
 glm::vec4 Renderer::traceRayComposite(const Ray& ray, float sampleStep) const
 {
-    // return this->frontToBackCompositing(ray, sampleStep);
     return this->backToFrontComposite(ray, sampleStep);
 }
 
@@ -273,25 +272,6 @@ glm::vec4 Renderer::backToFrontComposite(const Ray& ray, float sampleStep) const
     return glm::vec4(color, 1);
 }
 
-// TODO check why this does not work as back to front
-glm::vec4 Renderer::frontToBackCompositing(const Ray& ray, float sampleStep) const
-{
-    glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
-    const glm::vec3 increment = sampleStep * ray.direction;
-
-    glm::vec3 color(1.0f);
-    float opacity = 1.0f;
-
-    for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
-        glm::vec tf_value = this->getTFValue(this->m_pVolume->getVoxelInterpolate(samplePos));
-
-        color = opacity * color + (1 - opacity) * glm::vec3(tf_value);
-        opacity = opacity + (1 - opacity) * tf_value[3];
-    }
-
-    return glm::vec4(color / m_pVolume->maximum(), 1);
-}
-
 // In this function, implement 2D transfer function raycasting.
 // Use the getTF2DOpacity function that you implemented to compute the opacity according to the 2D transfer function.
 glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
@@ -304,7 +284,7 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
     for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= increment) {
         float intensity = this->m_pVolume->getVoxelInterpolate(samplePos);
         auto gradient = this->m_pGradientVolume->getGradientVoxel(samplePos);
-        float opacity = this->getTF2DOpacity(intensity, gradient.magnitude);
+        float opacity = this->getTF2DOpacity(intensity, gradient.magnitude) * this->m_config.TF2DColor.w;
         auto _color = glm::vec3(this->m_config.TF2DColor);
 
         if (this->m_config.volumeShading) {
@@ -314,7 +294,7 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
         color = opacity * _color + (1 - opacity) * color;
     }
 
-    return glm::vec4(color, 0.5f);
+    return glm::vec4(color, 1.0f);
 }
 
 // Compute Phong Shading given the voxel color (material color), the gradient, the light vector and view vector.
@@ -355,6 +335,7 @@ glm::vec4 Renderer::getTFValue(float val) const
 */
 bool inTriangle(float leftIntensity, float midIntensity, float rightIntensity, float intensity, float magnitude)
 {
+    // TODO explain
     if (intensity <= leftIntensity || intensity >= rightIntensity || magnitude <= 0) {
         return false;
     }
@@ -362,7 +343,7 @@ bool inTriangle(float leftIntensity, float midIntensity, float rightIntensity, f
     if (intensity == midIntensity) {
         return true;
     } else if (intensity < midIntensity) { // left side
-        return magnitude > (255 * (midIntensity - intensity) / (midIntensity - leftIntensity));
+        return magnitude > (255 * ((midIntensity - intensity) / (midIntensity - leftIntensity)));
     } else { // right side
         return magnitude > (255 * ((intensity - midIntensity) / (rightIntensity - midIntensity)));
     }
@@ -374,6 +355,7 @@ bool inTriangle(float leftIntensity, float midIntensity, float rightIntensity, f
 */
 float linearOpacity(float intensityCenter, float radius, float intensity, float magnitude)
 {
+    // TODO explain
     float horizontalWidth = radius * (magnitude / 255);
     return 1 - (abs(intensityCenter - intensity) / horizontalWidth);
 }
@@ -386,7 +368,12 @@ float linearOpacity(float intensityCenter, float radius, float intensity, float 
 // The 2D transfer function settings can be accessed through m_config.TF2DIntensity and m_config.TF2DRadius.
 float Renderer::getTF2DOpacity(float intensity, float gradientMagnitude) const
 {
-    if (inTriangle(intensity - this->m_config.TF2DRadius, this->m_config.TF2DIntensity, intensity + this->m_config.TF2DRadius, intensity, gradientMagnitude)) { // inside the triangle
+    if (inTriangle(
+            this->m_config.TF2DIntensity - this->m_config.TF2DRadius,
+            this->m_config.TF2DIntensity,
+            this->m_config.TF2DIntensity + this->m_config.TF2DRadius,
+            intensity,
+            gradientMagnitude)) { // inside the triangle
         // at this moment triangleGradientBoundary is the point above intensity where the triangle gets intersected
         return linearOpacity(this->m_config.TF2DIntensity, this->m_config.TF2DRadius, intensity, gradientMagnitude);
         // return 1;

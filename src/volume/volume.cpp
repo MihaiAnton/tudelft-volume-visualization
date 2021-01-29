@@ -165,8 +165,9 @@ float Volume::weight(float x)
 // This functions returns the results of a cubic interpolation using 4 values and a factor
 float Volume::cubicInterpolate(float g0, float g1, float g2, float g3, float factor)
 {
-    float value = pow(factor, 3) * (-0.5 * g0 + 1.5 * g1 - 1.5 * g2 + 0.5 * g3) + pow(factor, 2) * (g0 - 2.5 * g1 + 2 * g2 - 0.5 * g3) + factor * (-0.5 * g0 + 0.5 * g2) + g1;
-    return value;
+    return weight(1 + factor) * g0 + weight(factor) * g1 + weight(1 - factor) * g2 + weight(2 - factor) * g3;
+    // float value = pow(factor, 3) * (-0.5 * g0 + 1.5 * g1 - 1.5 * g2 + 0.5 * g3) + pow(factor, 2) * (g0 - 2.5 * g1 + 2 * g2 - 0.5 * g3) + factor * (-0.5 * g0 + 0.5 * g2) + g1;
+    // return value;
 }
 
 // ======= TODO : Check if correct ========
@@ -181,8 +182,8 @@ float Volume::bicubicInterpolateXY(const glm::vec2& xyCoord, int z) const
     const int x = static_cast<int>(xyCoord.x);
     const int y = static_cast<int>(xyCoord.y);
 
-    const float fac_x = xyCoord.x - float(x);
-    const float fac_y = xyCoord.y - float(y);
+    const float fac_x = xyCoord.x - int(x);
+    const float fac_y = xyCoord.y - int(y);
 
     for (int i = 0 - offset; i < 4 - offset; i++) {
         int x = static_cast<int>(xyCoord.x + i);
@@ -208,7 +209,7 @@ float Volume::getVoxelTriCubicInterpolate(const glm::vec3& coord) const
     glm::vec4 values;
     int offset = 1;
     const int z = static_cast<int>(coord.z);
-    const float fac_z = coord.z - float(z);
+    const float fac_z = coord.z - int(z);
 
     for (int i = 0 - offset; i < 4 - offset; i++) {
         int z = static_cast<int>(coord.z + i);
