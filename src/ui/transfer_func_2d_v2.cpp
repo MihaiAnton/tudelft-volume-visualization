@@ -235,6 +235,16 @@ void TransferFunction2DV2Widget::draw()
     ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth() * 0.4f);
     ImGui::ColorPicker4("Color1", glm::value_ptr(m_color_0));
 
+    ImGui::Text("Intensity: ");
+    ImGui::SameLine();
+    ImGui::PushItemWidth(50.f);
+    ImGui::InputScalar("", ImGuiDataType_Float, &m_intensity_1, NULL, NULL, "%.2f", ImGuiInputTextFlags_ReadOnly);
+    ImGui::SameLine();
+    ImGui::Text("Radius: ");
+    ImGui::SameLine();
+    ImGui::PushItemWidth(50.f);
+    ImGui::InputScalar("", ImGuiDataType_Float, &m_radius_1, NULL, NULL, "%.2f", ImGuiInputTextFlags_ReadOnly);
+
     ImGui::NewLine();
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + xOffset / 2);
     ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth() * 0.4f);
