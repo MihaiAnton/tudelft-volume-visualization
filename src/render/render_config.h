@@ -1,8 +1,8 @@
 #pragma once
 #include <array>
+#include <cstring> // memcmp  // macOS change TH
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
-#include <cstring> // memcmp  // macOS change TH
 
 namespace render {
 
@@ -11,7 +11,8 @@ enum class RenderMode {
     RenderMIP,
     RenderIso,
     RenderComposite,
-    RenderTF2D
+    RenderTF2D,
+    RenderTF2DV2
 };
 
 struct RenderConfig {
@@ -32,6 +33,11 @@ struct RenderConfig {
     float TF2DIntensity;
     float TF2DRadius;
     glm::vec4 TF2DColor;
+
+    // 2D V2 transfer function
+    float TF2DV2Intensity_0, TF2DV2Intensity_1;
+    float TF2DV2Radius_0, TF2DV2Radius_1;
+    glm::vec4 TF2DV2Color_0, TF2DV2Color_1;
 };
 
 // NOTE(Mathijs): should be replaced by C++20 three-way operator (aka spaceship operator) if we require C++ 20 support from Linux users (GCC10 / Clang10).

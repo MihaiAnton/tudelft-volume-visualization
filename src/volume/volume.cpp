@@ -166,11 +166,8 @@ float Volume::weight(float x)
 float Volume::cubicInterpolate(float g0, float g1, float g2, float g3, float factor)
 {
     return weight(1 + factor) * g0 + weight(factor) * g1 + weight(1 - factor) * g2 + weight(2 - factor) * g3;
-    // float value = pow(factor, 3) * (-0.5 * g0 + 1.5 * g1 - 1.5 * g2 + 0.5 * g3) + pow(factor, 2) * (g0 - 2.5 * g1 + 2 * g2 - 0.5 * g3) + factor * (-0.5 * g0 + 0.5 * g2) + g1;
-    // return value;
 }
 
-// ======= TODO : Check if correct ========
 // This function returns the value of a bicubic interpolation
 float Volume::bicubicInterpolateXY(const glm::vec2& xyCoord, int z) const
 {
@@ -199,7 +196,6 @@ float Volume::bicubicInterpolateXY(const glm::vec2& xyCoord, int z) const
     return cubicInterpolate(values[0], values[1], values[2], values[3], fac_x);
 }
 
-// ======= TODO : Check if correct ========
 // This function computes the tricubic interpolation at coord
 float Volume::getVoxelTriCubicInterpolate(const glm::vec3& coord) const
 {

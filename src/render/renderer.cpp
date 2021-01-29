@@ -69,7 +69,7 @@ void Renderer::render()
     const Bounds bounds { glm::vec3(0.0f), glm::vec3(m_pVolume->dims() - glm::ivec3(1)) };
 
     // 0 = sequential (single-core), 1 = TBB (multi-core)
-#if true // TODO change back to #ifdef NDEBUG
+#ifdef NDEBUG 
     // If NOT in debug mode then enable parallelism using the TBB library (Intel Threaded Building Blocks).
 #define PARALLELISM 1
 #else
@@ -119,6 +119,10 @@ void Renderer::render()
             }
             case RenderMode::RenderTF2D: {
                 color = traceRayTF2D(ray, sampleStep);
+                break;
+            }
+            case RenderMode::RenderTF2DV2: {
+                color = traceRayTF2DV2(ray, sampleStep);
                 break;
             }
             };
@@ -217,12 +221,10 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 // iterations such that it does not get stuck in degerate cases.
 float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoValue) const
 {
-    glm::vec3 right = ray.origin + ray.tmax * ray.direction;
 
     int maxIterations = 500;
-    const float minDifference = 0.0001;
+    const float minDifference = 0.0001f;
 
-    float voxelFinalValue = this->m_pVolume->getVoxelInterpolate(right);
     float tMiddle = (t0 + t1) / 2;
 
     while (maxIterations > 0) {
@@ -252,6 +254,12 @@ glm::vec4 Renderer::traceRayComposite(const Ray& ray, float sampleStep) const
     return this->backToFrontComposite(ray, sampleStep);
 }
 
+/**
+ * Applies back to front compositing and returns the color composed
+ *  @param ray: ray throught the volume
+ *  @param sampleStep: step along the ray
+ *  @return: resulting color
+ */
 glm::vec4 Renderer::backToFrontComposite(const Ray& ray, float sampleStep) const
 {
     glm::vec3 samplePos = ray.origin + ray.tmax * ray.direction;
@@ -305,12 +313,11 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 // You are free to choose any specular power that you'd like.
 glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V)
 {
-    const float ka = 0.1;
-    const float kd = 0.7;
-    const float ks = 0.2;
-    const int alpha = 100;
+    const float ka = 0.1f;
+    const float kd = 0.7f;
+    const float ks = 0.2f;
     const int n = 100;
-    const float eps = 0.0001;
+    const float eps = 0.0001f; // avoiding division by 0
 
     const float theta = acos(glm::dot(gradient.dir, -L) / (gradient.magnitude * glm::length(L) + eps));
     const float phi = acos(glm::dot(gradient.dir, V) / (gradient.magnitude * glm::length(V) + eps)) - theta;
@@ -332,31 +339,38 @@ glm::vec4 Renderer::getTFValue(float val) const
 /**
  *  Checks if the point (intensity, magnitude) is in the triangle defined by the points 
  *          (leftIntensity, 255), (midIntensity, 0), (rightIntensity, 255)
+ * @return: true of false
 */
 bool inTriangle(float leftIntensity, float midIntensity, float rightIntensity, float intensity, float magnitude)
 {
-    // TODO explain
+    // out of bounds or below the triangle
     if (intensity <= leftIntensity || intensity >= rightIntensity || magnitude <= 0) {
         return false;
     }
 
+    // right in the apex
     if (intensity == midIntensity) {
         return true;
     } else if (intensity < midIntensity) { // left side
+        // compute the estimated bound at the height given by intensity and compare to the given magnitude
         return magnitude > (255 * ((midIntensity - intensity) / (midIntensity - leftIntensity)));
     } else { // right side
+        // similar as to the left side
         return magnitude > (255 * ((intensity - midIntensity) / (rightIntensity - midIntensity)));
     }
 }
 
 /**
- *  Computes the opacity based on the in-triangle position 
- * 
+ *  Computes the opacity of a point in the triangle fiven the triangle coordinates.
+ *  @return opacity
 */
 float linearOpacity(float intensityCenter, float radius, float intensity, float magnitude)
 {
-    // TODO explain
+    // width of the triangle at the height given by magnitude
     float horizontalWidth = radius * (magnitude / 255);
+
+    // we want intensity 1 in the center of the triangle and 0 at the opposite points
+    // (abs(intensityCenter - intensity) / horizontalWidth) = how far (in percentages) is the point from the apex
     return 1 - (abs(intensityCenter - intensity) / horizontalWidth);
 }
 
@@ -420,5 +434,115 @@ void Renderer::fillColor(int x, int y, const glm::vec4& color)
 {
     const size_t index = static_cast<size_t>(m_config.renderResolution.x * y + x);
     m_frameBuffer[index] = color;
+}
+
+/**
+ *  Custom 2D transfer function (V2)
+ *  Adds a second triangle for better data separation.
+ *  @param ray: ray throught the volume
+ *  @param sampleStep: step along the ray
+ *  @return: resulting color
+ */
+glm::vec4 Renderer::traceRayTF2DV2(const Ray& ray, float sampleStep) const
+{
+    glm::vec3 samplePos = ray.origin + ray.tmax * ray.direction;
+    const glm::vec3 increment = sampleStep * ray.direction;
+
+    glm::vec3 color(0.0f);
+
+    for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= increment) {
+        float intensity = this->m_pVolume->getVoxelInterpolate(samplePos);
+        auto gradient = this->m_pGradientVolume->getGradientVoxel(samplePos);
+        float opacity = this->getTF2DV2Opacity(intensity, gradient.magnitude);
+
+        auto _color = this->getTF2DV2Color(intensity, gradient.magnitude);
+
+        opacity *= _color.w;
+
+        color = opacity * glm::vec3(_color) + (1 - opacity) * color;
+    }
+
+    return glm::vec4(color, 1.0f);
+}
+
+/**
+ *  Used int the second version of the 2D transfer function.
+ *  Given that there are 2 triangles, the method checks if the (intensity, magnitude) pair is in any triangle
+ * and returns the corresponding linear opacity value.
+ *  In case of collisions, it returns the largest value.
+ *  @param intensity: voxel intensity
+ *  @param gradientMagnitude: voxel gradient magnitude
+ *  @return: opacity value [0,1]
+ */
+float Renderer::getTF2DV2Opacity(float intensity, float gradientMagnitude) const
+{
+
+    bool inTriangle_0 = inTriangle(
+        this->m_config.TF2DV2Intensity_0 - this->m_config.TF2DV2Radius_0,
+        this->m_config.TF2DV2Intensity_0,
+        this->m_config.TF2DV2Intensity_0 + this->m_config.TF2DV2Radius_0,
+        intensity,
+        gradientMagnitude);
+
+    bool inTriangle_1 = inTriangle(
+        this->m_config.TF2DV2Intensity_1 - this->m_config.TF2DV2Radius_1,
+        this->m_config.TF2DV2Intensity_1,
+        this->m_config.TF2DV2Intensity_1 + this->m_config.TF2DV2Radius_1,
+        intensity,
+        gradientMagnitude);
+
+    if (inTriangle_0) { // inside triangle_0
+        return linearOpacity(this->m_config.TF2DV2Intensity_0, this->m_config.TF2DV2Radius_0, intensity, gradientMagnitude);
+    } else if (inTriangle_1) { // inside triangle_1
+        return linearOpacity(this->m_config.TF2DV2Intensity_1, this->m_config.TF2DV2Radius_1, intensity, gradientMagnitude);
+    } else if (inTriangle_0 && inTriangle_1) {
+        return std::max(
+            linearOpacity(this->m_config.TF2DV2Intensity_0, this->m_config.TF2DV2Radius_0, intensity, gradientMagnitude),
+            linearOpacity(this->m_config.TF2DV2Intensity_1, this->m_config.TF2DV2Radius_1, intensity, gradientMagnitude));
+    }
+
+    return 0.0f;
+}
+
+/**
+ *  Used int the second version of the 2D transfer function.
+ *  Given that there are 2 triangles, the method checks if the (intensity, magnitude) pair is in any triangle
+ * and returns the corresponding color.
+ *  In case of collisions, it returns the color of triangle with the largest value.
+ *  @param intensity: voxel intensity
+ *  @param gradientMagnitude: voxel gradient magnitude
+ *  @return: 4 dim vector with the color and opacity
+ */
+glm::vec4 Renderer::getTF2DV2Color(float intensity, float gradientMagnitude) const
+{
+    bool inTriangle_0 = inTriangle(
+        this->m_config.TF2DV2Intensity_0 - this->m_config.TF2DV2Radius_0,
+        this->m_config.TF2DV2Intensity_0,
+        this->m_config.TF2DV2Intensity_0 + this->m_config.TF2DV2Radius_0,
+        intensity,
+        gradientMagnitude);
+
+    bool inTriangle_1 = inTriangle(
+        this->m_config.TF2DV2Intensity_1 - this->m_config.TF2DV2Radius_1,
+        this->m_config.TF2DV2Intensity_1,
+        this->m_config.TF2DV2Intensity_1 + this->m_config.TF2DV2Radius_1,
+        intensity,
+        gradientMagnitude);
+
+    if (inTriangle_0) { // inside triangle_0
+        return this->m_config.TF2DV2Color_0;
+    } else if (inTriangle_1) { // inside triangle_1
+        return this->m_config.TF2DV2Color_1;
+    } else if (inTriangle_0 && inTriangle_1) {
+        const auto opacity_1 = linearOpacity(this->m_config.TF2DV2Intensity_0, this->m_config.TF2DV2Radius_0, intensity, gradientMagnitude);
+        const auto opacity_2 = linearOpacity(this->m_config.TF2DV2Intensity_1, this->m_config.TF2DV2Radius_1, intensity, gradientMagnitude);
+        if (opacity_1 > opacity_2) {
+            return this->m_config.TF2DV2Color_0;
+        } else {
+            return this->m_config.TF2DV2Color_1;
+        }
+    }
+
+    return glm::vec4(0, 0, 0, 0);
 }
 }
