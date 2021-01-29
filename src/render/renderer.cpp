@@ -167,7 +167,6 @@ glm::vec4 Renderer::traceRayMIP(const Ray& ray, float sampleStep) const
     return glm::vec4(glm::vec3(maxVal) / m_pVolume->maximum(), 1.0f);
 }
 
-// ======= TODO: check phong parameters ========
 // This function should find the position where the ray intersects with the volume's isosurface.
 // If volume shading is DISABLED then simply return the isoColor.
 // If volume shading is ENABLED then return the phong-shaded color at that location using the local gradient (from m_pGradientVolume).
@@ -293,7 +292,6 @@ glm::vec4 Renderer::frontToBackCompositing(const Ray& ray, float sampleStep) con
     return glm::vec4(color / m_pVolume->maximum(), 1);
 }
 
-// ======= TODO: IMPLEMENT ========
 // In this function, implement 2D transfer function raycasting.
 // Use the getTF2DOpacity function that you implemented to compute the opacity according to the 2D transfer function.
 glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
@@ -319,7 +317,6 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
     return glm::vec4(color, 0.5f);
 }
 
-// ======= TODO: IMPLEMENT ========
 // Compute Phong Shading given the voxel color (material color), the gradient, the light vector and view vector.
 // You can find out more about the Phong shading model at:
 // https://en.wikipedia.org/wiki/Phong_reflection_model
@@ -380,7 +377,6 @@ float linearOpacity(float intensityCenter, float radius, float intensity, float 
     return 1 - (abs(intensityCenter - intensity) / horizontalWidth);
 }
 
-// ======= TODO: IMPLEMENT ========
 // This function should return an opacity value for the given intensity and gradient according to the 2D transfer function.
 // Calculate whether the values are within the radius/intensity triangle defined in the 2D transfer function widget.
 // If so: return a tent weighting as described in the assignment
