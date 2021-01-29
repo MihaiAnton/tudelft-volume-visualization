@@ -52,7 +52,7 @@ void Menu::setLoadedVolume(const volume::Volume& volume, const volume::GradientV
 {
     m_tfWidget = TransferFunctionWidget(volume);
     m_tf2DWidget = TransferFunction2DWidget(volume, gradientVolume);
-    m_tf2DV2Widget = TransferFunction2DWidget(volume, gradientVolume);
+    m_tf2DV2Widget = TransferFunction2DV2Widget(volume, gradientVolume);
 
     m_tfWidget->updateRenderConfig(m_renderConfig);
     m_tf2DWidget->updateRenderConfig(m_renderConfig);

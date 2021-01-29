@@ -7,6 +7,7 @@ target_sources(VolVis
 		"${CMAKE_CURRENT_LIST_DIR}/ui/trackball.cpp"
 		"${CMAKE_CURRENT_LIST_DIR}/ui/transfer_func.cpp"
 		"${CMAKE_CURRENT_LIST_DIR}/ui/transfer_func_2d.cpp"
+		"${CMAKE_CURRENT_LIST_DIR}/ui/transfer_func_2d_v2.cpp"
 		"${CMAKE_CURRENT_LIST_DIR}/ui/window.cpp"
 		"${CMAKE_CURRENT_LIST_DIR}/ui/surface_cube.cpp"
 		"${CMAKE_CURRENT_LIST_DIR}/ui/wireframe_cube.cpp"

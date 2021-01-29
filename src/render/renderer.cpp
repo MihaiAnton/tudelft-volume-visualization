@@ -121,6 +121,10 @@ void Renderer::render()
                 color = traceRayTF2D(ray, sampleStep);
                 break;
             }
+            case RenderMode::RenderTF2DV2: {
+                color = traceRayTF2DV2(ray, sampleStep);
+                break;
+            }
             };
             // Write the resulting color to the screen.
             fillColor(x, y, color);
@@ -275,6 +279,32 @@ glm::vec4 Renderer::backToFrontComposite(const Ray& ray, float sampleStep) const
 // In this function, implement 2D transfer function raycasting.
 // Use the getTF2DOpacity function that you implemented to compute the opacity according to the 2D transfer function.
 glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
+{
+    glm::vec3 samplePos = ray.origin + ray.tmax * ray.direction;
+    const glm::vec3 increment = sampleStep * ray.direction;
+
+    glm::vec3 color(0.0f);
+
+    for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= increment) {
+        float intensity = this->m_pVolume->getVoxelInterpolate(samplePos);
+        auto gradient = this->m_pGradientVolume->getGradientVoxel(samplePos);
+        float opacity = this->getTF2DOpacity(intensity, gradient.magnitude) * this->m_config.TF2DColor.w;
+        auto _color = glm::vec3(this->m_config.TF2DColor);
+
+        if (this->m_config.volumeShading) {
+            _color = computePhongShading(_color, gradient, m_pCamera->position(), ray.direction);
+        }
+
+        color = opacity * _color + (1 - opacity) * color;
+    }
+
+    return glm::vec4(color, 1.0f);
+}
+
+// TODO change to our needs
+// In this function, implement 2D transfer function raycasting.
+// Use the getTF2DOpacity function that you implemented to compute the opacity according to the 2D transfer function.
+glm::vec4 Renderer::traceRayTF2DV2(const Ray& ray, float sampleStep) const
 {
     glm::vec3 samplePos = ray.origin + ray.tmax * ray.direction;
     const glm::vec3 increment = sampleStep * ray.direction;
