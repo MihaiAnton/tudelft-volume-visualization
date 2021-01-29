@@ -301,32 +301,6 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
     return glm::vec4(color, 1.0f);
 }
 
-// TODO change to our needs
-// In this function, implement 2D transfer function raycasting.
-// Use the getTF2DOpacity function that you implemented to compute the opacity according to the 2D transfer function.
-glm::vec4 Renderer::traceRayTF2DV2(const Ray& ray, float sampleStep) const
-{
-    glm::vec3 samplePos = ray.origin + ray.tmax * ray.direction;
-    const glm::vec3 increment = sampleStep * ray.direction;
-
-    glm::vec3 color(0.0f);
-
-    for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= increment) {
-        float intensity = this->m_pVolume->getVoxelInterpolate(samplePos);
-        auto gradient = this->m_pGradientVolume->getGradientVoxel(samplePos);
-        float opacity = this->getTF2DOpacity(intensity, gradient.magnitude) * this->m_config.TF2DColor.w;
-        auto _color = glm::vec3(this->m_config.TF2DColor);
-
-        if (this->m_config.volumeShading) {
-            _color = computePhongShading(_color, gradient, m_pCamera->position(), ray.direction);
-        }
-
-        color = opacity * _color + (1 - opacity) * color;
-    }
-
-    return glm::vec4(color, 1.0f);
-}
-
 // Compute Phong Shading given the voxel color (material color), the gradient, the light vector and view vector.
 // You can find out more about the Phong shading model at:
 // https://en.wikipedia.org/wiki/Phong_reflection_model
@@ -450,5 +424,101 @@ void Renderer::fillColor(int x, int y, const glm::vec4& color)
 {
     const size_t index = static_cast<size_t>(m_config.renderResolution.x * y + x);
     m_frameBuffer[index] = color;
+}
+
+// TODO change to our needs
+// In this function, implement 2D transfer function raycasting.
+// Use the getTF2DOpacity function that you implemented to compute the opacity according to the 2D transfer function.
+glm::vec4 Renderer::traceRayTF2DV2(const Ray& ray, float sampleStep) const
+{
+    glm::vec3 samplePos = ray.origin + ray.tmax * ray.direction;
+    const glm::vec3 increment = sampleStep * ray.direction;
+
+    glm::vec3 color(0.0f);
+
+    for (float t = ray.tmax; t >= ray.tmin; t -= sampleStep, samplePos -= increment) {
+        float intensity = this->m_pVolume->getVoxelInterpolate(samplePos);
+        auto gradient = this->m_pGradientVolume->getGradientVoxel(samplePos);
+        float opacity = this->getTF2DV2Opacity(intensity, gradient.magnitude);
+
+        auto _color = this->getTF2DV2Color(intensity, gradient.magnitude);
+
+        opacity *= _color.w;
+
+            color = opacity * glm::vec3(_color) + (1 - opacity) * color;
+    }
+
+    return glm::vec4(color, 1.0f);
+}
+
+// TODO comment
+float Renderer::getTF2DV2Opacity(float val, float gradientMagnitude) const
+{
+
+    bool inTriangle_0 = inTriangle(
+        this->m_config.TF2DV2Intensity_0 - this->m_config.TF2DV2Radius_0,
+        this->m_config.TF2DV2Intensity_0,
+        this->m_config.TF2DV2Intensity_0 + this->m_config.TF2DV2Radius_0,
+        val,
+        gradientMagnitude);
+
+    bool inTriangle_1 = inTriangle(
+        this->m_config.TF2DV2Intensity_1 - this->m_config.TF2DV2Radius_1,
+        this->m_config.TF2DV2Intensity_1,
+        this->m_config.TF2DV2Intensity_1 + this->m_config.TF2DV2Radius_1,
+        val,
+        gradientMagnitude);
+
+    if (inTriangle_0) { // inside triangle_0
+        // at this moment triangleGradientBoundary is the point above intensity where the triangle gets intersected
+        return linearOpacity(this->m_config.TF2DV2Intensity_0, this->m_config.TF2DV2Radius_0, val, gradientMagnitude);
+        // return 1;
+    } else if (inTriangle_1) { // inside triangle_1
+        // at this moment triangleGradientBoundary is the point above intensity where the triangle gets intersected
+        return linearOpacity(this->m_config.TF2DV2Intensity_1, this->m_config.TF2DV2Radius_1, val, gradientMagnitude);
+        // return 1;
+    } else if (inTriangle_0 && inTriangle_1) {
+        return std::max(
+            linearOpacity(this->m_config.TF2DV2Intensity_0, this->m_config.TF2DV2Radius_0, val, gradientMagnitude),
+            linearOpacity(this->m_config.TF2DV2Intensity_1, this->m_config.TF2DV2Radius_1, val, gradientMagnitude));
+    }
+
+    return 0.0f;
+}
+
+// TODO comment
+glm::vec4 Renderer::getTF2DV2Color(float val, float gradientMagnitude) const
+{
+    bool inTriangle_0 = inTriangle(
+        this->m_config.TF2DV2Intensity_0 - this->m_config.TF2DV2Radius_0,
+        this->m_config.TF2DV2Intensity_0,
+        this->m_config.TF2DV2Intensity_0 + this->m_config.TF2DV2Radius_0,
+        val,
+        gradientMagnitude);
+
+    bool inTriangle_1 = inTriangle(
+        this->m_config.TF2DV2Intensity_1 - this->m_config.TF2DV2Radius_1,
+        this->m_config.TF2DV2Intensity_1,
+        this->m_config.TF2DV2Intensity_1 + this->m_config.TF2DV2Radius_1,
+        val,
+        gradientMagnitude);
+
+    if (inTriangle_0) { // inside triangle_0
+        // at this moment triangleGradientBoundary is the point above intensity where the triangle gets intersected
+        return this->m_config.TF2DV2Color_0;
+        // return 1;
+    } else if (inTriangle_1) { // inside triangle_1
+        // at this moment triangleGradientBoundary is the point above intensity where the triangle gets intersected
+        return this->m_config.TF2DV2Color_1;
+        // return 1;
+    } else if (inTriangle_0 && inTriangle_1) {
+        if (linearOpacity(this->m_config.TF2DV2Intensity_0, this->m_config.TF2DV2Radius_0, val, gradientMagnitude) > linearOpacity(this->m_config.TF2DV2Intensity_1, this->m_config.TF2DV2Radius_1, val, gradientMagnitude)) {
+            return this->m_config.TF2DV2Color_0;
+        } else {
+            return this->m_config.TF2DV2Color_1;
+        }
+    }
+
+    return glm::vec4(0, 0, 0, 0);
 }
 }

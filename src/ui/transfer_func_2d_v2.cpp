@@ -21,10 +21,13 @@ static constexpr float pointRadius = 8.0f;
 static constexpr glm::ivec2 widgetSize { 475, 300 };
 
 TransferFunction2DV2Widget::TransferFunction2DV2Widget(const volume::Volume& volume, const volume::GradientVolume& gradient)
-    : m_intensity(68.0f)
+    : m_intensity_0(68.0f)
+    , m_intensity_1(100.0f)
     , m_maxIntensity(volume.maximum())
-    , m_radius(38.0f)
-    , m_color(0.0f, 0.8f, 0.6f, 0.3f)
+    , m_radius_0(38.0f)
+    , m_radius_1(20.0f)
+    , m_color_0(0.0f, 0.8f, 0.6f, 0.3f)
+    , m_color_1(0.0f, 0.8f, 0.6f, 0.3f)
     , m_interactingPoint(-1)
     , m_histogramImg(0)
 {
@@ -46,7 +49,7 @@ void TransferFunction2DV2Widget::draw()
 {
     const ImGuiIO& io = ImGui::GetIO();
 
-    ImGui::Text("2D Transfer Function");
+    ImGui::Text("2D Transfer Function V2");
     ImGui::Text("Click and drag points to alter the m_radius or m_intensity");
 
     // Histogram image is positioned to the right of the content region.
@@ -105,12 +108,20 @@ void TransferFunction2DV2Widget::draw()
         std::min(std::max(io.MousePos.y, bbMin.y), bbMax.y)
     };
 
-    const float normalizedIntensity = m_intensity / m_maxIntensity;
-    const float normalizedRadius = m_radius / m_maxIntensity;
-    const std::array points = {
-        glm::vec2(normalizedIntensity, 0.f),
-        glm::vec2(normalizedIntensity - normalizedRadius, 1.f),
-        glm::vec2(normalizedIntensity + normalizedRadius, 1.f)
+    const float normalizedIntensity_0 = m_intensity_0 / m_maxIntensity;
+    const float normalizedRadius_0 = m_radius_0 / m_maxIntensity;
+    const std::array points_0 = {
+        glm::vec2(normalizedIntensity_0, 0.f),
+        glm::vec2(normalizedIntensity_0 - normalizedRadius_0, 1.f),
+        glm::vec2(normalizedIntensity_0 + normalizedRadius_0, 1.f)
+    };
+
+    const float normalizedIntensity_1 = m_intensity_1 / m_maxIntensity;
+    const float normalizedRadius_1 = m_radius_1 / m_maxIntensity;
+    const std::array points_1 = {
+        glm::vec2(normalizedIntensity_1, 0.f),
+        glm::vec2(normalizedIntensity_1 - normalizedRadius_1, 1.f),
+        glm::vec2(normalizedIntensity_1 + normalizedRadius_1, 1.f)
     };
 
     const glm::vec2 viewScale { canvasSize.x, -canvasSize.y };
@@ -122,12 +133,21 @@ void TransferFunction2DV2Widget::draw()
             // Left mouse button is down.
             if (m_interactingPoint == -1) {
                 // No point is currently selected; check if the user clicked any of the points.
-                for (size_t i = 0; i < points.size(); i++) {
-                    const glm::vec2 pointPosition = points[i] * viewScale + viewOffset;
+                for (size_t i = 0; i < points_0.size(); i++) {
+                    const glm::vec2 pointPosition = points_0[i] * viewScale + viewOffset;
                     const glm::vec2 diff = pointPosition - clippedMousePos;
                     float distanceSquared = glm::dot(diff, diff);
                     if (distanceSquared < pointRadius * pointRadius) {
                         m_interactingPoint = int(i);
+                        break;
+                    }
+                }
+                for (size_t i = 0; i < points_1.size(); i++) {
+                    const glm::vec2 pointPosition = points_1[i] * viewScale + viewOffset;
+                    const glm::vec2 diff = pointPosition - clippedMousePos;
+                    float distanceSquared = glm::dot(diff, diff);
+                    if (distanceSquared < pointRadius * pointRadius) {
+                        m_interactingPoint = int(i + points_0.size());
                         break;
                     }
                 }
@@ -137,33 +157,56 @@ void TransferFunction2DV2Widget::draw()
                 // A point was already selected.
                 switch (m_interactingPoint) {
                 case 0: {
-                    // m_intensity point
-                    m_intensity = mousePos.x * m_maxIntensity;
+                    // m_intensity_0 point
+                    m_intensity_0 = mousePos.x * m_maxIntensity;
                 } break;
                 case 1: {
                     // left m_radius point
-                    m_radius = std::max(m_intensity - mousePos.x * m_maxIntensity, 1.0f);
+                    m_radius_0 = std::max(m_intensity_0 - mousePos.x * m_maxIntensity, 1.0f);
                 } break;
                 case 2: {
                     // right m_radius point
-                    m_radius = std::max(mousePos.x * m_maxIntensity - m_intensity, 1.0f);
+                    m_radius_0 = std::max(mousePos.x * m_maxIntensity - m_intensity_0, 1.0f);
+                } break;
+                case 3: {
+                    // m_intensity_0 point
+                    m_intensity_1 = mousePos.x * m_maxIntensity;
+                } break;
+                case 4: {
+                    // left m_radius point
+                    m_radius_1 = std::max(m_intensity_1 - mousePos.x * m_maxIntensity, 1.0f);
+                } break;
+                case 5: {
+                    // right m_radius point
+                    m_radius_1 = std::max(mousePos.x * m_maxIntensity - m_intensity_1, 1.0f);
                 } break;
                 };
             }
         }
     }
 
-    // Draw m_intensity and m_radius points.
-    const ImVec2 leftRadiusPointPos = glmToIm(glm::vec2(normalizedIntensity - normalizedRadius, 1.f) * viewScale + viewOffset);
-    const ImVec2 rightRadiusPointPos = glmToIm(glm::vec2(normalizedIntensity + normalizedRadius, 1.f) * viewScale + viewOffset);
-    const ImVec2 intensityPointPos = glmToIm(glm::vec2(normalizedIntensity, 0.f) * viewScale + viewOffset);
+    // Draw m_intensity_0 and m_radius points.
+    const ImVec2 leftRadiusPointPos_0 = glmToIm(glm::vec2(normalizedIntensity_0 - normalizedRadius_0, 1.f) * viewScale + viewOffset);
+    const ImVec2 rightRadiusPointPos_0 = glmToIm(glm::vec2(normalizedIntensity_0 + normalizedRadius_0, 1.f) * viewScale + viewOffset);
+    const ImVec2 intensityPointPos_0 = glmToIm(glm::vec2(normalizedIntensity_0, 0.f) * viewScale + viewOffset);
 
-    drawList->AddLine(leftRadiusPointPos, intensityPointPos, 0xFFFFFFFF);
-    drawList->AddLine(intensityPointPos, rightRadiusPointPos, 0xFFFFFFFF);
+    const ImVec2 leftRadiusPointPos_1 = glmToIm(glm::vec2(normalizedIntensity_1 - normalizedRadius_1, 1.f) * viewScale + viewOffset);
+    const ImVec2 rightRadiusPointPos_1 = glmToIm(glm::vec2(normalizedIntensity_1 + normalizedRadius_1, 1.f) * viewScale + viewOffset);
+    const ImVec2 intensityPointPos_1 = glmToIm(glm::vec2(normalizedIntensity_1, 0.f) * viewScale + viewOffset);
 
-    drawList->AddCircleFilled(leftRadiusPointPos, pointRadius, 0xFFFFFFFF);
-    drawList->AddCircleFilled(intensityPointPos, pointRadius, 0xFFFFFFFF);
-    drawList->AddCircleFilled(rightRadiusPointPos, pointRadius, 0xFFFFFFFF);
+    drawList->AddLine(leftRadiusPointPos_0, intensityPointPos_0, 0xFFFFFFFF);
+    drawList->AddLine(intensityPointPos_0, rightRadiusPointPos_0, 0xFFFFFFFF);
+
+    drawList->AddLine(leftRadiusPointPos_1, intensityPointPos_1, 0xFFFFFFFF);
+    drawList->AddLine(intensityPointPos_1, rightRadiusPointPos_1, 0xFFFFFFFF);
+
+    drawList->AddCircleFilled(leftRadiusPointPos_0, pointRadius, 0xFFFFFFFF);
+    drawList->AddCircleFilled(intensityPointPos_0, pointRadius, 0xFFFFFFFF);
+    drawList->AddCircleFilled(rightRadiusPointPos_0, pointRadius, 0xFFFFFFFF);
+
+    drawList->AddCircleFilled(leftRadiusPointPos_1, pointRadius, 0xFFFFFFFF);
+    drawList->AddCircleFilled(intensityPointPos_1, pointRadius, 0xFFFFFFFF);
+    drawList->AddCircleFilled(rightRadiusPointPos_1, pointRadius, 0xFFFFFFFF);
 
     drawList->PopClipRect();
 
@@ -180,24 +223,35 @@ void TransferFunction2DV2Widget::draw()
     ImGui::Text("Intensity: ");
     ImGui::SameLine();
     ImGui::PushItemWidth(50.f);
-    ImGui::InputScalar("", ImGuiDataType_Float, &m_intensity, NULL, NULL, "%.2f", ImGuiInputTextFlags_ReadOnly);
+    ImGui::InputScalar("", ImGuiDataType_Float, &m_intensity_0, NULL, NULL, "%.2f", ImGuiInputTextFlags_ReadOnly);
     ImGui::SameLine();
     ImGui::Text("Radius: ");
     ImGui::SameLine();
     ImGui::PushItemWidth(50.f);
-    ImGui::InputScalar("", ImGuiDataType_Float, &m_radius, NULL, NULL, "%.2f", ImGuiInputTextFlags_ReadOnly);
+    ImGui::InputScalar("", ImGuiDataType_Float, &m_radius_0, NULL, NULL, "%.2f", ImGuiInputTextFlags_ReadOnly);
 
     ImGui::NewLine();
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + xOffset / 2);
     ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth() * 0.4f);
-    ImGui::ColorPicker4("Color", glm::value_ptr(m_color));
+    ImGui::ColorPicker4("Color1", glm::value_ptr(m_color_0));
+
+    ImGui::NewLine();
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + xOffset / 2);
+    ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth() * 0.4f);
+    ImGui::ColorPicker4("Color2", glm::value_ptr(m_color_1));
 }
 
 void TransferFunction2DV2Widget::updateRenderConfig(render::RenderConfig& renderConfig)
 {
-    renderConfig.TF2DIntensity = m_intensity;
-    renderConfig.TF2DRadius = m_radius;
-    renderConfig.TF2DColor = m_color;
+    renderConfig.TF2DColor = m_color_0;
+
+    renderConfig.TF2DV2Intensity_0 = m_intensity_0;
+    renderConfig.TF2DV2Radius_0 = m_radius_0;
+    renderConfig.TF2DV2Color_0 = m_color_0;
+
+    renderConfig.TF2DV2Intensity_1 = m_intensity_1;
+    renderConfig.TF2DV2Radius_1 = m_radius_1;
+    renderConfig.TF2DV2Color_1 = m_color_1;
 }
 }
 

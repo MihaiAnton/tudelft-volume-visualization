@@ -16,9 +16,9 @@ public:
     void updateRenderConfig(render::RenderConfig& renderConfig);
 
 private:
-    float m_intensity, m_maxIntensity;
-    float m_radius;
-    glm::vec4 m_color;
+    float m_intensity_0, m_intensity_1, m_maxIntensity;
+    float m_radius_0, m_radius_1;
+    glm::vec4 m_color_0, m_color_1;
 
     int m_interactingPoint;
     GLuint m_histogramImg;
