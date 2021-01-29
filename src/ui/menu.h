@@ -40,6 +40,7 @@ private:
     void showRayCastTab(std::chrono::duration<double> renderTime);
     void showTransFuncTab();
     void show2DTransFuncTab();
+    void show2DV2TransFuncTab();
 
     void callRenderConfigChangedCallback() const;
     void callInterpolationModeChangedCallback() const;
@@ -51,6 +52,7 @@ private:
 
     std::optional<TransferFunctionWidget> m_tfWidget;
     std::optional<TransferFunction2DWidget> m_tf2DWidget;
+    std::optional<TransferFunction2DWidget> m_tf2DV2Widget;
 
     glm::ivec2 m_baseRenderResolution;
     float m_resolutionScale { 1.0f };

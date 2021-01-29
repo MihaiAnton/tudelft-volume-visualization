@@ -52,9 +52,11 @@ void Menu::setLoadedVolume(const volume::Volume& volume, const volume::GradientV
 {
     m_tfWidget = TransferFunctionWidget(volume);
     m_tf2DWidget = TransferFunction2DWidget(volume, gradientVolume);
+    m_tf2DV2Widget = TransferFunction2DWidget(volume, gradientVolume);
 
     m_tfWidget->updateRenderConfig(m_renderConfig);
     m_tf2DWidget->updateRenderConfig(m_renderConfig);
+    m_tf2DV2Widget->updateRenderConfig(m_renderConfig);
 
     const glm::ivec3 dim = volume.dims();
     m_volumeInfo = fmt::format("Volume info:\n{}\nDimensions: ({}, {}, {})\nVoxel value range: {} - {}\n",
@@ -80,6 +82,7 @@ void Menu::drawMenu(const glm::ivec2& pos, const glm::ivec2& size, std::chrono::
         showRayCastTab(renderTime);
         showTransFuncTab();
         show2DTransFuncTab();
+        show2DV2TransFuncTab();
 
         if (m_renderConfig != renderConfigBefore)
             callRenderConfigChangedCallback();
@@ -132,6 +135,7 @@ void Menu::showRayCastTab(std::chrono::duration<double> renderTime)
         ImGui::RadioButton("IsoSurface Rendering", pRenderModeInt, int(render::RenderMode::RenderIso));
         ImGui::RadioButton("Compositing", pRenderModeInt, int(render::RenderMode::RenderComposite));
         ImGui::RadioButton("2D Transfer Function", pRenderModeInt, int(render::RenderMode::RenderTF2D));
+        ImGui::RadioButton("2D Transfer Function V2", pRenderModeInt, int(render::RenderMode::RenderTF2DV2));
 
         ImGui::NewLine();
 
@@ -174,6 +178,16 @@ void Menu::show2DTransFuncTab()
     if (ImGui::BeginTabItem("2D transfer function")) {
         m_tf2DWidget->draw();
         m_tf2DWidget->updateRenderConfig(m_renderConfig);
+        ImGui::EndTabItem();
+    }
+}
+
+// This renders the 2D Transfer Function V2 Widget.
+void Menu::show2DV2TransFuncTab()
+{
+    if (ImGui::BeginTabItem("2DTF V2")) {
+        m_tf2DV2Widget->draw();
+        m_tf2DV2Widget->updateRenderConfig(m_renderConfig);
         ImGui::EndTabItem();
     }
 }
