@@ -330,9 +330,10 @@ glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::Gr
     const float ks = 0.2;
     const int alpha = 100;
     const int n = 100;
+    const float eps = 0.0001;
 
-    const float theta = acos(glm::dot(gradient.dir, -L) / (gradient.magnitude * glm::length(L)));
-    const float phi = acos(glm::dot(gradient.dir, V) / (gradient.magnitude * glm::length(V))) - theta;
+    const float theta = acos(glm::dot(gradient.dir, -L) / (gradient.magnitude * glm::length(L) + eps));
+    const float phi = acos(glm::dot(gradient.dir, V) / (gradient.magnitude * glm::length(V) + eps)) - theta;
 
     return (ka + kd * cos(theta) + ks * float(pow(cos(phi), n))) * color;
 }
